@@ -34,11 +34,42 @@ Your output must be a clean JSON object following this exact schema:
 Output ONLY raw JSON. Do not wrap your response in markdown code blocks or backticks."""
 
 def get_market_insights(query: str) -> str:
-    """Uses Tavily to pull contextual background market data to feed into the loops."""
+    """Uses Tavily to pull contextual background market data, formatting it cleanly as a document."""
     try:
         context = tavily_client.get_search_context(query=f"{query} market price industrial", max_results=2)
+        # Attempt to parse and format the JSON response into a professional human-readable report
+        try:
+            data = json.loads(context)
+            if isinstance(data, list):
+                lines = [
+                    f"# MARKET INTELLIGENCE REPORT: {query.upper()}",
+                    "",
+                    "__This research document summarizes current market pricing and specifications gathered via live search indexing.__",
+                    "",
+                    "---",
+                    ""
+                ]
+                for idx, item in enumerate(data, 1):
+                    url = item.get("url", "N/A")
+                    content = item.get("content", "").strip()
+                    # Clean up continuous whitespaces and formatting
+                    content_cleaned = " ".join(content.split())
+                    
+                    lines.append(f"## [{idx}] Source Documentation")
+                    lines.append(f"- **Reference URL**: {url}")
+                    lines.append("")
+                    lines.append("### Relevant Specifications & Extracts")
+                    lines.append(f"*\"{content_cleaned}\"*")
+                    lines.append("")
+                    lines.append("---")
+                    lines.append("")
+                return "\n".join(lines)
+        except Exception as format_err:
+            print(f"Failed to parse and format Tavily JSON context: {format_err}")
+            
         return context
-    except Exception:
+    except Exception as e:
+        print(f"Error during Tavily search context fetch: {e}")
         return "Standard market valuation parameters apply."
 
 def run_agent_turn(role: str, conversation_history: list, budget_cap: int = 1000) -> dict:
@@ -82,3 +113,55 @@ def check_negotiation_status(buyer_data: dict, seller_data: dict, buyer_max: int
         return {"status": "deadlock", "gap": ask - offer}
 
     return {"status": "continue"}
+
+
+# ----------------------------------------------------------------------
+# Backward Compatible Wrapper Interfaces for backend/main.py Orchestrator
+# ----------------------------------------------------------------------
+
+def run_market_intelligence(item_name: str) -> str:
+    """
+    Exposes market research engine to main.py, executing get_market_insights.
+    """
+    return get_market_insights(item_name)
+
+def generate_agent_turn(
+    participant_name: str,
+    participant_role: str,
+    hidden_floor_ceil: int,
+    current_price: int,
+    tech_specs: str,
+    chat_history: list[dict]
+) -> dict:
+    """
+    Translates main.py exchange state parameters into run_agent_turn's signature.
+    Maps offered_price / requested_price back to price_point for unified database persistence.
+    """
+    role = "Buyer" if participant_role == "BUYER" else "Seller"
+    
+    # Format chat logs for the generative context history block
+    conversation_history = []
+    for h in chat_history:
+        conversation_history.append(f"[{h['sender']} | {h['role']}]: {h['text']}")
+        
+    # Execute the structured generative step
+    res = run_agent_turn(
+        role=role,
+        conversation_history=conversation_history,
+        budget_cap=hidden_floor_ceil
+    )
+    
+    # Retrieve role-specific price key
+    price_key = "offered_price" if role == "Buyer" else "requested_price"
+    price_val = res.get(price_key)
+    
+    # Secure numeric parsing
+    try:
+        price_point = int(price_val)
+    except (TypeError, ValueError):
+        price_point = hidden_floor_ceil
+        
+    return {
+        "message": res.get("message", ""),
+        "price_point": price_point
+    }
