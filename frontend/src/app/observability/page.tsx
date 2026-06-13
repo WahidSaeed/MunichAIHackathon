@@ -108,24 +108,6 @@ export default function ObservabilityPage() {
         </div>
       </header>
 
-      {/* ROUTE TAB SELECTOR (VISUAL CONTINUITY) */}
-      <div className="h-10 border-b border-[#111111] bg-white flex shrink-0">
-        <Link
-          href="/"
-          className="flex-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-all duration-100 bg-white text-[#111111] hover:bg-gray-100 flex items-center justify-center border-r border-[#111111]"
-        >
-          Tab 1: Transaction Workspace
-        </Link>
-        <div
-          className="flex-1 font-mono text-[10px] font-bold uppercase tracking-wider transition-all duration-100 bg-[#111111] text-white flex items-center justify-center gap-2"
-        >
-          <Sliders className="h-3.5 w-3.5" />
-          <span>Tab 2: Fastino Pioneer Observability</span>
-          {pioneerStream.some(item => item.status === "DEADLOCK") && (
-            <span className="h-2 w-2 bg-red-500 animate-pulse"></span>
-          )}
-        </div>
-      </div>
 
       {/* MAIN DATA-HEAVY MONITORING SYSTEM GRID */}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 grid grid-cols-1 xl:grid-cols-3 gap-4 bg-[#fafafa]">

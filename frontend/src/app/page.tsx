@@ -675,50 +675,47 @@ export default function Home() {
           
           {/* ACTIVE LOT CONTEXT BAR */}
           <div className="h-11 border-b border-[#111111] bg-white px-4 flex items-center justify-between shrink-0">
-            {activeDeal ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <Terminal className="h-4 w-4 text-[#111111]" />
-                  <span className="font-mono text-xs font-bold uppercase tracking-wider text-[#111111]">
+            <div className="flex items-center gap-2 min-w-0">
+              {activeDeal ? (
+                <div className="flex items-center gap-2 min-w-0">
+                  <Terminal className="h-4 w-4 text-[#111111] shrink-0" />
+                  <span className="font-mono text-xs font-bold uppercase tracking-wider text-[#111111] truncate">
                     EXCHANGE FEED | LOT: {activeDeal.item_name}
                   </span>
-                  <span className="font-mono text-[9px] font-bold px-2 py-0.5 border border-amber-500 bg-amber-100 text-amber-900">
-                    ROLE: {activeDeal.perspective === "BUYER" ? "BUYER (WE BUY)" : "SELLER (WE SELL)"}
+                  <span className="font-mono text-[9px] font-bold px-2 py-0.5 border border-amber-500 bg-amber-100 text-amber-900 shrink-0">
+                    ROLE: {activeDeal.perspective === "BUYER" ? "BUYER" : "SELLER"}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[9px] font-bold uppercase text-gray-500">
-                    DEAL ID:
-                  </span>
-                  <span className="font-mono text-[9px] font-bold text-gray-700 select-all">
-                    {activeDeal.id.slice(0, 8).toUpperCase()}...
-                  </span>
-                </div>
-              </>
-            ) : (
-              <span className="font-mono text-xs font-bold text-gray-400 uppercase">
-                NO ACTIVE LOT ELECTED. INITIALIZE OR CHOOSE FROM PANEL.
-              </span>
-            )}
-          </div>
-
-          {/* EXPLICIT, FLAT, HIGH-CONTRAST TAB SELECTOR MENU */}
-          <div className="h-10 border-b border-[#111111] bg-white flex shrink-0">
-            <div
-              className="flex-grow flex-1 font-mono text-[10px] font-bold uppercase tracking-wider bg-[#111111] text-white flex items-center justify-center"
-            >
-              Tab 1: Transaction Workspace
-            </div>
-            <Link
-              href="/observability"
-              className="flex-grow flex-1 font-mono text-[10px] font-bold uppercase border-l border-[#111111] tracking-wider transition-all duration-100 flex items-center justify-center gap-2 bg-white text-[#111111] hover:bg-gray-100"
-            >
-              <Sliders className="h-3.5 w-3.5" />
-              <span>Tab 2: Fastino Pioneer Observability</span>
-              {pioneerStream.some(item => item.status === "DEADLOCK") && (
-                <span className="h-2 w-2 bg-red-500 animate-pulse"></span>
+              ) : (
+                <span className="font-mono text-xs font-bold text-gray-400 uppercase truncate">
+                  NO ACTIVE LOT ELECTED. INITIALIZE OR CHOOSE FROM PANEL.
+                </span>
               )}
-            </Link>
+            </div>
+
+            <div className="flex items-center gap-4 shrink-0">
+              {activeDeal && (
+                <div className="hidden md:flex items-center gap-1.5 font-mono text-[9px] text-gray-500 font-bold uppercase">
+                  <span>DEAL ID:</span>
+                  <span className="text-gray-700 select-all">{activeDeal.id.slice(0, 8).toUpperCase()}...</span>
+                </div>
+              )}
+              
+              <Link
+                href="/observability"
+                className="font-mono text-[10px] font-bold uppercase border border-[#111111] px-2.5 py-1 bg-[#111111] text-white hover:bg-white hover:text-[#111111] flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(17,17,17,1)] hover:shadow-[2px_2px_0px_rgba(17,17,17,0.1)] transition-all relative animate-fade-in"
+                title="System Observability Dashboard"
+              >
+                <Sliders className="h-3.5 w-3.5" />
+                <span>Observability</span>
+                {pioneerStream.some(item => item.status === "DEADLOCK") && (
+                  <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  </span>
+                )}
+              </Link>
+            </div>
           </div>
 
           <>
