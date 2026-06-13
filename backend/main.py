@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .database import engine, Base, get_db
 from .models import Deal, Participant, Message
-from .agents import run_market_intelligence, generate_agent_turn
+from .agents import run_market_intelligence, generate_agent_turn, ingest_unstructured_rfq_to_specifications, search_market_valuation_benchmarks, ingest_unstructured_rfq_with_fastino, log_trace_to_fastino_pioneer
 
 # SQLAlchemy automatic table migration on startup
 @asynccontextmanager
@@ -44,6 +44,55 @@ class NegotiateStepRequest(BaseModel):
 class OperatorMessageRequest(BaseModel):
     deal_id: str
     message_text: str
+
+class DealIngestRequest(BaseModel):
+    raw_text: str
+
+@app.get("/api/observability/pioneer-stream")
+def get_pioneer_stream(db: Session = Depends(get_db)):
+    """
+    Pulls recent transaction history from the database. It constructs a tracking stream list by extracting deal states,
+    counting active messages, and dynamically invoking log_trace_to_fastino_pioneer for each lot.
+    For deals trapped in an active DEADLOCK status, the response payload must return a populated anomaly block.
+    """
+    deals = db.query(Deal).order_by(Deal.created_at.desc()).all()
+    stream_list = []
+    for d in deals:
+        msgs = db.query(Message).filter(Message.deal_id == d.id).order_by(Message.timestamp.asc()).all()
+        msgs_list = [{"sender": m.sender_name, "role": m.role, "text": m.message_text} for m in msgs]
+        
+        # Determine if we should invoke log_trace_to_fastino_pioneer with DEADLOCK failure mode
+        failure_mode = "DEADLOCK" if d.status == "DEADLOCK" else None
+        pioneer_res = log_trace_to_fastino_pioneer(
+            deal_id=str(d.id),
+            transcript=msgs_list,
+            failure_mode=failure_mode
+        )
+        
+        # Build populated anomaly block
+        if d.status == "DEADLOCK":
+            anomaly_block = {
+                "is_anomaly": True,
+                "automated_lora_trigger": True,
+                "optimization_route": "SLM-NEGOTIATION-ADAPTER-V2"
+            }
+        else:
+            anomaly_block = {
+                "is_anomaly": False,
+                "automated_lora_trigger": False,
+                "optimization_route": None
+            }
+            
+        stream_list.append({
+            "deal_id": str(d.id),
+            "item_name": d.item_name,
+            "status": d.status,
+            "message_count": len(msgs),
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+            "pioneer_trace": pioneer_res,
+            "anomaly_block": anomaly_block
+        })
+    return stream_list
 
 @app.get("/api/deals")
 def list_deals(db: Session = Depends(get_db)):
@@ -177,6 +226,101 @@ def create_deal(payload: DealCreateRequest, db: Session = Depends(get_db)):
         db.add(msg)
         
     db.commit()
+    
+    return {"status": "SUCCESS", "deal_id": str(deal_id)}
+
+@app.post("/api/deals/ingest")
+def ingest_deal(payload: DealIngestRequest, db: Session = Depends(get_db)):
+    """
+    Ingests an unstructured raw text RFQ layout or email, routes it through Fastino's task-optimized parsing,
+    searches live marketplace price references using Tavily, creates a new active Buyer-perspective Deal,
+    seeds both participants, triggers Pioneer trace logging, and commits the records to PostgreSQL.
+    """
+    # 1. Run unstructured RFQ parsing using Fastino's task-optimized model simulated route
+    ingest_data = ingest_unstructured_rfq_with_fastino(payload.raw_text)
+    item_name = ingest_data["item_name"]
+    budget_cap = ingest_data["recommended_budget_cap"]
+    extracted_specs = ingest_data["extracted_specs"]
+    
+    # 2. Run market research grounding using Tavily + Gemini formatting
+    market_report = search_market_valuation_benchmarks(item_name)
+    
+    # 3. Combine extracted specifications and market reports
+    combined_specs = (
+        f"# TECHNICAL HARDWARE SPECIFICATIONS (EXTRACTED RFQ):\n\n"
+        f"{extracted_specs}\n\n"
+        f"==================================================\n\n"
+        f"{market_report}"
+    )
+    
+    # 4. Spawn a new Deal row
+    deal_id = uuid.uuid4()
+    new_deal = Deal(
+        id=deal_id,
+        item_name=item_name,
+        status="ACTIVE",
+        current_buyer_budget=budget_cap,
+        technical_specs=combined_specs,
+        perspective="BUYER"
+    )
+    db.add(new_deal)
+    
+    # 5. Provision isolated Participant records
+    participants_seed = [
+        Participant(
+            id=uuid.uuid4(),
+            deal_id=deal_id,
+            name="Buyer (You)",
+            role="BUYER",
+            current_price_point=int(budget_cap * 0.7),  # starting bid
+            hidden_floor_ceil=budget_cap
+        ),
+        Participant(
+            id=uuid.uuid4(),
+            deal_id=deal_id,
+            name="Seller Agent",
+            role="SELLER",
+            current_price_point=int(budget_cap * 1.15),  # starting ask
+            hidden_floor_ceil=int(budget_cap * 0.85)  # floor limit
+        )
+    ]
+    
+    for p in participants_seed:
+        db.add(p)
+        
+    # 6. Append initial Message timeline traces
+    announcements = [
+        Message(
+            id=uuid.uuid4(),
+            deal_id=deal_id,
+            sender_name="System Settlement",
+            role="SYSTEM",
+            message_text=f"UNSTRUCTURED RFQ INGESTION COMPLETE FOR LOT '{item_name.upper()}' (FASTINO-POWERED)."
+        ),
+        Message(
+            id=uuid.uuid4(),
+            deal_id=deal_id,
+            sender_name="System Settlement",
+            role="SYSTEM",
+            message_text=f"TAVILY CONTEXT INJECTED:\n{combined_specs}"
+        ),
+        Message(
+            id=uuid.uuid4(),
+            deal_id=deal_id,
+            sender_name="System Settlement",
+            role="SYSTEM",
+            message_text="BUYER-PERSPECTIVE EXCHANGE ARMED. YOU ARE THE BUYER (Counter-Offers trigger Seller Agent turns)."
+        )
+    ]
+    
+    for msg in announcements:
+        db.add(msg)
+        
+    db.commit()
+    
+    # 7. Pioneer Observability Log Trace
+    transcript_mock = [{"sender": a.sender_name, "role": a.role, "text": a.message_text} for a in announcements]
+    log_trace_to_fastino_pioneer(deal_id=str(deal_id), transcript=transcript_mock)
     
     return {"status": "SUCCESS", "deal_id": str(deal_id)}
 
@@ -333,6 +477,15 @@ def negotiate_step(payload: NegotiateStepRequest, db: Session = Depends(get_db))
         )
         db.add(deadlock_msg)
         db.commit()
+        
+        # Trigger Pioneer Observability fine-tuning logs for Deadlock Anomaly
+        try:
+            full_msgs = db.query(Message).filter(Message.deal_id == deal_uuid).order_by(Message.timestamp.asc()).all()
+            transcript_list = [{"sender": m.sender_name, "role": m.role, "text": m.message_text} for m in full_msgs]
+            log_trace_to_fastino_pioneer(deal_id=str(deal_uuid), transcript=transcript_list, failure_mode="DEADLOCK")
+        except Exception as logger_err:
+            print(f"Failed to log Pioneer deadlock trace: {logger_err}")
+            
         return {"status": "DEADLOCK"}
         
     return {"status": "ACTIVE", "deal_status": deal.status}
