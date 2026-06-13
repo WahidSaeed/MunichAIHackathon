@@ -21,7 +21,9 @@ import {
   ShoppingBag,
   Tag,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 
 const parseInlineMarkdown = (text: string) => {
@@ -162,6 +164,18 @@ export default function Home() {
 
   // Real-time telemetry monitoring states
   const [pioneerStream, setPioneerStream] = useState<any[]>([]);
+  const [isSpecsExpanded, setIsSpecsExpanded] = useState(false);
+
+  // Close specs overlay on ESC key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsSpecsExpanded(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const activeDeal = deals.find(d => d.id === activeDealId) || null;
 
@@ -884,9 +898,9 @@ export default function Home() {
         </section>
 
         {/* RIGHT HAND LIQUIDITY DEPTH SIDEBAR */}
-        <aside className="w-96 min-h-0 border-l border-[#111111] bg-white p-4 overflow-y-auto shrink-0 flex flex-col gap-4">
+        <aside className="w-96 min-h-0 border-l border-[#111111] bg-white p-4 shrink-0 flex flex-col gap-4 overflow-hidden">
           
-          <div className="border-b border-[#111111] pb-2">
+          <div className="border-b border-[#111111] pb-2 shrink-0">
             <span className="font-mono text-xs font-bold uppercase tracking-wider text-[#111111] block mb-0.5">
               LIQUIDITY DEPTH LEDGER
             </span>
@@ -897,117 +911,129 @@ export default function Home() {
 
           {activeDeal ? (
             <>
-              {/* CURRENT ACTIVE OFFER SPREAD BOX */}
-              <div className="border border-[#111111] p-3 bg-[#fafafa]">
-                <div className="flex justify-between items-center">
-                  <span className="font-mono text-[10px] font-bold text-gray-500 uppercase">
-                    ACTIVE BOOK SPREAD:
-                  </span>
-                  <span className="font-mono text-sm font-bold text-[#111111] bg-white border border-[#111111] px-1.5 py-0.5 select-all">
-                    {spread}
-                  </span>
-                </div>
-                {activeDeal.status === "DEADLOCK" && (
-                  <div className="mt-2.5 border border-red-500 bg-red-50 p-2 text-red-800 flex gap-2 items-start">
-                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span className="font-mono text-[9px] font-bold leading-normal uppercase">
-                      CRITICAL DEADLOCK STALL: ALL OFFERS HAVE REACHED ABSOLUTE CAP AND FLOOR LIMITS.
+              {/* TOP LEDGER SECTIONS */}
+              <div className="flex-none overflow-y-auto space-y-4 max-h-[45%] pr-1 min-h-0 shrink-0">
+                {/* CURRENT ACTIVE OFFER SPREAD BOX */}
+                <div className="border border-[#111111] p-3 bg-[#fafafa]">
+                  <div className="flex justify-between items-center">
+                    <span className="font-mono text-[10px] font-bold text-gray-500 uppercase">
+                      ACTIVE BOOK SPREAD:
+                    </span>
+                    <span className="font-mono text-sm font-bold text-[#111111] bg-white border border-[#111111] px-1.5 py-0.5 select-all">
+                      {spread}
                     </span>
                   </div>
-                )}
-                {activeDeal.status === "MATCHED" && (
-                  <div className="mt-2.5 border border-emerald-500 bg-emerald-50 p-2 text-emerald-800 flex gap-2 items-start">
-                    <Check className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span className="font-mono text-[9px] font-bold leading-normal uppercase">
-                      SETTLEMENT MATCH CONFIRMED: CONTRACT HAS BEEN ESCROW REGISTERED.
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* TRADING LEDGER SPLIT GRID */}
-              <div className="space-y-4">
-                
-                {/* BUYERS LEDGER (BIDS) */}
-                <div>
-                  <div className="font-mono text-[10px] font-bold text-[#111111] border-b border-dashed border-gray-400 pb-1 mb-2 uppercase tracking-wide">
-                    BUYER POSITION (BID)
-                  </div>
-                  <div className="space-y-1.5">
-                    {bids.map((b) => {
-                      const isHumanBid = b.name === "Buyer (You)";
-                      return (
-                        <div 
-                          key={b.id} 
-                          className={`border p-2 text-xs font-mono flex justify-between items-center ${
-                            isHumanBid
-                              ? "border-amber-500 bg-amber-50/40 font-bold"
-                              : "border-blue-200 bg-blue-50/20"
-                          }`}
-                        >
-                          <div className="flex flex-col gap-0.5">
-                            <span className={isHumanBid ? "text-amber-950" : "text-blue-900"}>{b.name}</span>
-                            <span className={`text-[9px] uppercase ${isHumanBid ? "text-amber-800" : "text-blue-500"}`}>
-                              BUDGET CAP: {b.hidden_floor_ceil} EUR
-                            </span>
-                          </div>
-                          <span className={`text-xs font-bold px-2 py-1 border ${
-                            isHumanBid 
-                              ? "text-amber-950 bg-white border-amber-500" 
-                              : "text-gray-900 bg-white border-blue-300"
-                          }`}>
-                            {b.current_price_point ? `${b.current_price_point} EUR` : "NO OFFER"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {activeDeal.status === "DEADLOCK" && (
+                    <div className="mt-2.5 border border-red-500 bg-red-50 p-2 text-red-800 flex gap-2 items-start">
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span className="font-mono text-[9px] font-bold leading-normal uppercase">
+                        CRITICAL DEADLOCK STALL: ALL OFFERS HAVE REACHED ABSOLUTE CAP AND FLOOR LIMITS.
+                      </span>
+                    </div>
+                  )}
+                  {activeDeal.status === "MATCHED" && (
+                    <div className="mt-2.5 border border-emerald-500 bg-emerald-50 p-2 text-emerald-800 flex gap-2 items-start">
+                      <Check className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span className="font-mono text-[9px] font-bold leading-normal uppercase">
+                        SETTLEMENT MATCH CONFIRMED: CONTRACT HAS BEEN ESCROW REGISTERED.
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                {/* SELLERS LEDGER (ASKS) */}
-                <div>
-                  <div className="font-mono text-[10px] font-bold text-[#111111] border-b border-dashed border-gray-400 pb-1 mb-2 uppercase tracking-wide">
-                    SELLER POSITION (ASK)
-                  </div>
-                  <div className="space-y-1.5">
-                    {asks.map((s) => {
-                      const isHumanAsk = s.name === "Seller (You)";
-                      return (
-                        <div 
-                          key={s.id} 
-                          className={`border p-2 text-xs font-mono flex justify-between items-center ${
-                            isHumanAsk
-                              ? "border-amber-500 bg-amber-50/40 font-bold"
-                              : "border-gray-300 bg-white"
-                          }`}
-                        >
-                          <div className="flex flex-col gap-0.5">
-                            <span className={isHumanAsk ? "text-amber-950" : "text-gray-800"}>{s.name}</span>
-                            <span className={`text-[9px] uppercase ${isHumanAsk ? "text-amber-800" : "text-gray-400"}`}>
-                              RESERVATION FLOOR: {s.hidden_floor_ceil} EUR
+                {/* TRADING LEDGER SPLIT GRID */}
+                <div className="space-y-4">
+                  
+                  {/* BUYERS LEDGER (BIDS) */}
+                  <div>
+                    <div className="font-mono text-[10px] font-bold text-[#111111] border-b border-dashed border-gray-400 pb-1 mb-2 uppercase tracking-wide">
+                      BUYER POSITION (BID)
+                    </div>
+                    <div className="space-y-1.5">
+                      {bids.map((b) => {
+                        const isHumanBid = b.name === "Buyer (You)";
+                        return (
+                          <div 
+                            key={b.id} 
+                            className={`border p-2 text-xs font-mono flex justify-between items-center ${
+                              isHumanBid
+                                ? "border-amber-500 bg-amber-50/40 font-bold"
+                                : "border-blue-200 bg-blue-50/20"
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className={isHumanBid ? "text-amber-950" : "text-blue-900"}>{b.name}</span>
+                              <span className={`text-[9px] uppercase ${isHumanBid ? "text-amber-800" : "text-blue-500"}`}>
+                                BUDGET CAP: {b.hidden_floor_ceil} EUR
+                              </span>
+                            </div>
+                            <span className={`text-xs font-bold px-2 py-1 border ${
+                              isHumanBid 
+                                ? "text-amber-950 bg-white border-amber-500" 
+                                : "text-gray-900 bg-white border-blue-300"
+                            }`}>
+                              {b.current_price_point ? `${b.current_price_point} EUR` : "NO OFFER"}
                             </span>
                           </div>
-                          <span className={`text-xs font-bold px-2 py-1 border ${
-                            isHumanAsk
-                              ? "text-amber-950 bg-white border-amber-500"
-                              : "text-gray-900 bg-[#fafafa] border-gray-400"
-                          }`}>
-                            {s.current_price_point ? `${s.current_price_point} EUR` : "NO OFFER"}
-                          </span>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
 
+                  {/* SELLERS LEDGER (ASKS) */}
+                  <div>
+                    <div className="font-mono text-[10px] font-bold text-[#111111] border-b border-dashed border-gray-400 pb-1 mb-2 uppercase tracking-wide">
+                      SELLER POSITION (ASK)
+                    </div>
+                    <div className="space-y-1.5">
+                      {asks.map((s) => {
+                        const isHumanAsk = s.name === "Seller (You)";
+                        return (
+                          <div 
+                            key={s.id} 
+                            className={`border p-2 text-xs font-mono flex justify-between items-center ${
+                              isHumanAsk
+                                ? "border-amber-500 bg-amber-50/40 font-bold"
+                                : "border-gray-300 bg-white"
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className={isHumanAsk ? "text-amber-950" : "text-gray-800"}>{s.name}</span>
+                              <span className={`text-[9px] uppercase ${isHumanAsk ? "text-amber-800" : "text-gray-400"}`}>
+                                RESERVATION FLOOR: {s.hidden_floor_ceil} EUR
+                              </span>
+                            </div>
+                            <span className={`text-xs font-bold px-2 py-1 border ${
+                              isHumanAsk
+                                ? "text-amber-950 bg-white border-amber-500"
+                                : "text-gray-900 bg-[#fafafa] border-gray-400"
+                            }`}>
+                              {s.current_price_point ? `${s.current_price_point} EUR` : "NO OFFER"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                </div>
               </div>
 
               {/* MARKET SPECIFICATION REPORT */}
-              <div className="flex-1 flex flex-col gap-1.5 mt-2 border-t border-[#111111] pt-3 overflow-hidden">
-                <span className="font-mono text-[10px] font-bold text-gray-500 uppercase block">
-                  INJECTED LOT CONTRACT SPECIFICATIONS:
-                </span>
-                <div className="border border-gray-300 bg-white p-3 font-mono text-[10px] leading-relaxed text-gray-700 overflow-y-auto h-48 select-text border-solid">
+              <div className="flex-1 flex flex-col gap-1.5 mt-2 border-t border-[#111111] pt-3 overflow-hidden min-h-0">
+                <div className="flex justify-between items-center mb-1 shrink-0">
+                  <span className="font-mono text-[10px] font-bold text-gray-500 uppercase">
+                    INJECTED LOT CONTRACT SPECIFICATIONS:
+                  </span>
+                  <button 
+                    onClick={() => setIsSpecsExpanded(true)}
+                    className="p-1 border border-gray-300 hover:bg-gray-100 bg-white text-[#111111] transition-all flex items-center justify-center shrink-0"
+                    title="Expand Specifications to Full View"
+                  >
+                    <Maximize2 className="h-3 w-3" />
+                  </button>
+                </div>
+                <div className="border border-gray-300 bg-white p-3 font-mono text-[10px] leading-relaxed text-gray-700 overflow-y-auto flex-1 select-text border-solid min-h-0">
                   <div className="space-y-1">
                     {renderMarkdown(activeDeal.technical_specs)}
                   </div>
@@ -1024,6 +1050,42 @@ export default function Home() {
         </aside>
 
       </div>
+
+      {/* FULL SCREEN CONTRACT SPECIFICATIONS OVERLAY MODAL */}
+      {isSpecsExpanded && activeDeal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 animate-fade-in backdrop-blur-sm">
+          <div className="w-full max-w-4xl h-[85vh] bg-white border-2 border-[#111111] flex flex-col shadow-[8px_8px_0px_rgba(17,17,17,1)] overflow-hidden">
+            {/* Modal Header */}
+            <div className="h-14 bg-[#111111] text-white px-4 flex items-center justify-between font-mono text-xs font-bold uppercase tracking-wider shrink-0 border-b border-[#111111]">
+              <div className="flex items-center gap-2">
+                <Terminal className="h-4.5 w-4.5 text-white" />
+                <span>LOT: {activeDeal.item_name} — FULL CONTRACT SPECIFICATIONS</span>
+              </div>
+              <button
+                onClick={() => setIsSpecsExpanded(false)}
+                className="border border-white px-3 py-1.5 bg-white text-[#111111] hover:bg-gray-100 transition-all flex items-center gap-1.5 text-[10px] font-bold"
+                title="Collapse to sidebar"
+              >
+                <Minimize2 className="h-3.5 w-3.5" />
+                <span>COLLAPSE VIEW [ESC]</span>
+              </button>
+            </div>
+            
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-8 font-mono text-xs text-gray-800 leading-relaxed select-text bg-white space-y-4">
+              <div className="max-w-3xl mx-auto space-y-2">
+                {renderMarkdown(activeDeal.technical_specs)}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="h-10 bg-[#fafafa] border-t border-[#111111] px-4 flex items-center justify-between shrink-0 font-mono text-[9px] text-gray-500 uppercase font-bold">
+              <span>SECURITY AUTH: LEVEL 4 ROOT ESCROW OPERATOR</span>
+              <span>ATIRA PROCUREMENT CONTRACT INDEX PROTOCOL v1.0</span>
+            </div>
+          </div>
+        </div>
+      )}
 
     </main>
   );
