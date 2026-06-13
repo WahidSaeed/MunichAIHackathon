@@ -1052,12 +1052,12 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="border border-[#111111] bg-black text-emerald-400 p-2.5 font-mono text-[8px] flex-1 flex flex-col min-h-0 mt-2 h-44">
+                  <div className="border border-[#111111] bg-black text-emerald-400 p-2.5 font-mono text-[8px] flex-1 flex flex-col min-h-[220px] mt-2">
                     <div className="border-b border-gray-800 pb-1 mb-1.5 uppercase font-bold text-gray-500 flex justify-between">
                       <span>LORA GRADIENT METRIC FEED</span>
                       <span className="text-emerald-500 animate-pulse font-bold">● LIVE STREAM</span>
                     </div>
-                    <div className="flex-1 overflow-y-auto font-mono text-[7.5px] leading-relaxed whitespace-pre-wrap select-text pr-1 max-h-[160px]">
+                    <div className="flex-1 overflow-y-auto font-mono text-[9.5px] leading-relaxed whitespace-pre-wrap select-text pr-1">
                       {loraLogs.map((log, index) => (
                         <div key={index} className="mb-0.5 font-mono text-emerald-400">
                           {log}
