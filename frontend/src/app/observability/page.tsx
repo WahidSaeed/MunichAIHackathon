@@ -12,13 +12,19 @@ import {
   Layers,
   Cpu,
   Activity,
-  ArrowLeft
+  ArrowLeft,
+  BarChart3
 } from "lucide-react";
 
 export default function ObservabilityPage() {
   const [pioneerStream, setPioneerStream] = useState<any[]>([]);
   const [loraLogs, setLoraLogs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Fetch pioneer telemetry stream
   const fetchPioneerStream = async () => {
@@ -73,6 +79,14 @@ export default function ObservabilityPage() {
     return () => clearInterval(interval);
   }, []);
 
+  if (!isMounted) {
+    return (
+      <div className="h-screen w-screen bg-[#fafafa] flex items-center justify-center font-mono text-xs uppercase text-[#111111]">
+        <span>Loading Atira Observability...</span>
+      </div>
+    );
+  }
+
   return (
     <main className="h-screen w-screen bg-[#fafafa] text-[#111111] flex flex-col overflow-hidden font-sans">
       
@@ -98,6 +112,14 @@ export default function ObservabilityPage() {
             <span>FASTINO TELEMETRY LIVE</span>
           </div>
           
+          <Link 
+            href="/dashboard"
+            className="font-mono text-[10px] font-bold uppercase border border-[#111111] px-3 py-1.5 bg-[#111111] text-white hover:bg-white hover:text-[#111111] flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(17,17,17,1)] active:translate-y-0.5 active:shadow-[1px_1px_0px_rgba(17,17,17,1)] transition-all"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            <span>ANALYTICS DASHBOARD</span>
+          </Link>
+
           <Link 
             href="/"
             className="font-mono text-[10px] font-bold uppercase border border-[#111111] px-3 py-1.5 bg-white hover:bg-gray-100 flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(17,17,17,1)] active:translate-y-0.5 active:shadow-[1px_1px_0px_rgba(17,17,17,1)] transition-all"

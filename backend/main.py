@@ -59,6 +59,10 @@ class OperatorMessageRequest(BaseModel):
 class DealIngestRequest(BaseModel):
     raw_text: str
 
+class UpdateStyleRequest(BaseModel):
+    deal_id: str
+    negotiation_style: str
+
 @app.get("/api/observability/pioneer-stream")
 def get_pioneer_stream(db: Session = Depends(get_db)):
     """
@@ -122,6 +126,7 @@ def list_deals(db: Session = Depends(get_db)):
             "current_buyer_budget": d.current_buyer_budget,
             "technical_specs": d.technical_specs,
             "perspective": d.perspective,
+            "negotiation_style": d.negotiation_style,
             "created_at": d.created_at,
             "participants": [{
                 "id": str(p.id),
@@ -159,7 +164,8 @@ def create_deal(payload: DealCreateRequest, db: Session = Depends(get_db)):
         status="ACTIVE",
         current_buyer_budget=payload.current_buyer_budget,
         technical_specs=intel_report,
-        perspective=perspective
+        perspective=perspective,
+        negotiation_style="DISTRIBUTIVE"
     )
     db.add(new_deal)
     
@@ -240,6 +246,50 @@ def create_deal(payload: DealCreateRequest, db: Session = Depends(get_db)):
     
     return {"status": "SUCCESS", "deal_id": str(deal_id)}
 
+@app.post("/api/deals/update-style")
+def update_style(payload: UpdateStyleRequest, db: Session = Depends(get_db)):
+    """
+    Updates the active room's sourcing style dynamically.
+    Fires a system timeline notification informing of the change.
+    """
+    try:
+        deal_uuid = uuid.UUID(payload.deal_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Deal UUID format")
+
+    deal = db.query(Deal).filter(Deal.id == deal_uuid).first()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    if deal.status != "ACTIVE":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Negotiation style can only be updated for active agent environments. Current environment state is {deal.status}."
+        )
+
+    style = payload.negotiation_style.upper().strip()
+    if style not in ["DISTRIBUTIVE", "INTEGRATIVE"]:
+        raise HTTPException(status_code=400, detail="Negotiation style must be DISTRIBUTIVE or INTEGRATIVE")
+
+    deal.negotiation_style = style
+    
+    # Broadcast/timeline message
+    sys_msg = Message(
+        id=uuid.uuid4(),
+        deal_id=deal_uuid,
+        sender_name="System Settlement",
+        role="SYSTEM",
+        message_text=f"[System Settlement | SYSTEM]: Dynamic style swapped to {style}. Strategies re-aligned."
+    )
+    db.add(sys_msg)
+    db.commit()
+
+    return {
+        "status": "SUCCESS_STYLE_UPDATED",
+        "deal_id": str(deal_uuid),
+        "negotiation_style": style
+    }
+
 @app.post("/api/deals/ingest")
 def ingest_deal(payload: DealIngestRequest, db: Session = Depends(get_db)):
     """
@@ -286,7 +336,8 @@ def ingest_deal(payload: DealIngestRequest, db: Session = Depends(get_db)):
         status="ACTIVE",
         current_buyer_budget=budget_cap,
         technical_specs=combined_specs,
-        perspective="BUYER"
+        perspective="BUYER",
+        negotiation_style="DISTRIBUTIVE"
     )
     db.add(new_deal)
     
@@ -408,7 +459,8 @@ async def ingest_file(file: UploadFile = File(...), db: Session = Depends(get_db
         status="ACTIVE",
         current_buyer_budget=budget_cap,
         technical_specs=combined_specs,
-        perspective="BUYER"
+        perspective="BUYER",
+        negotiation_style="DISTRIBUTIVE"
     )
     db.add(new_deal)
     
@@ -522,11 +574,20 @@ def negotiate_step(payload: NegotiateStepRequest, db: Session = Depends(get_db))
             hidden_floor_ceil=p.hidden_floor_ceil,
             current_price=p.current_price_point,
             tech_specs=deal.technical_specs,
-            chat_history=chat_history
+            chat_history=chat_history,
+            negotiation_style=deal.negotiation_style
         )
         
         # Save positions to participant ledger
         p.current_price_point = turn_data["price_point"]
+        
+        price_point = turn_data.get("price_point", p.current_price_point)
+        warranty = turn_data.get("proposed_warranty_years", 1)
+        payment = turn_data.get("proposed_payment_terms", "Net 30")
+        sla = turn_data.get("proposed_sla_uptime", "99.0%")
+        msg_body = turn_data.get("message", "").strip()
+        
+        formatted_message = f"[Offer: {price_point} EUR | {warranty}Yr Warranty | {payment} | SLA: {sla}] {msg_body}"
         
         # Save message transcript to the unified deal timeline
         new_msg = Message(
@@ -534,7 +595,7 @@ def negotiate_step(payload: NegotiateStepRequest, db: Session = Depends(get_db))
             deal_id=deal_uuid,
             sender_name=p.name,
             role=p.role,
-            message_text=turn_data["message"]
+            message_text=formatted_message
         )
         db.add(new_msg)
         db.flush() # Ensure database is up-to-date with this message for subsequent turns
@@ -543,7 +604,7 @@ def negotiate_step(payload: NegotiateStepRequest, db: Session = Depends(get_db))
         chat_history.append({
             "sender": p.name,
             "role": p.role,
-            "text": turn_data["message"]
+            "text": formatted_message
         })
         
     db.commit()

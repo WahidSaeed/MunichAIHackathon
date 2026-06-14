@@ -141,16 +141,117 @@ def run_market_intelligence(item_name: str) -> str:
     """
     return get_market_insights(item_name)
 
+def run_group_agent_turn(
+    role: str,
+    agent_name: str,
+    hidden_limit: int,
+    specs: str,
+    full_transcript: list[str],
+    negotiation_style: str
+) -> dict:
+    """
+    Executes a structured multi-variable negotiation turn using Gemini-2.5-Flash.
+    Under DISTRIBUTIVE styling: Focuses strictly on maximum margin capture from the budget cap/floor, CITING COMPETITIVE UNDERCUTNING and alternative BATNAs.
+    Under INTEGRATIVE styling: Enables trading TCO parameters (warranty, payment terms, delivery SLA uptime) to construct mutual value compromises when stuck.
+    Returns:
+      {"message": "...", "price_point": int, "proposed_warranty_years": int, "proposed_payment_terms": "...", "proposed_sla_uptime": "..."}
+    """
+    system_instruction = f"""You are an automated B2B {role} Agent representing a premium industrial firm.
+Your identity/name is "{agent_name}".
+Your strict boundary condition is:
+- If you are a Buyer: Your absolute maximum budget cap is {hidden_limit} EUR. You must never offer or agree to any price above {hidden_limit} EUR.
+- If you are a Seller: Your absolute lowest floor price is {hidden_limit} EUR. You must never offer or agree to any price below {hidden_limit} EUR.
+
+The current technical specifications and market research for this lot are:
+{specs}
+
+Your strategic posture is governed by the active negotiation style: **{negotiation_style}**.
+
+=== STRATEGIC POSTURE: DISTRIBUTIVE ===
+If style is DISTRIBUTIVE:
+1. You are in a win-lose, transactional posture. Your sole objective is to capture the maximum possible financial value for your firm.
+2. Squeeze the supplier/buyer margins as close to your limit as possible.
+3. Be highly argumentative, professional but demanding.
+4. Cite competitive undercutting, other available quotes, and alternative BATNAs (Best Alternative to a Negotiated Agreement) to force the other party to concede.
+5. Do NOT propose or agree to trade any TCO variables. Keep TCO parameters at standard baseline: warranty = 1 year, payment terms = "Net 30", SLA uptime = "99.0%".
+
+=== STRATEGIC POSTURE: INTEGRATIVE ===
+If style is INTEGRATIVE:
+1. You are in a win-win, collaborative joint-value creation posture.
+2. If negotiations are locking up or price concessions are hard to get, you strategically trade Total Cost of Ownership (TCO) variables to unlock value:
+   - Propose or accept extended warranty periods (up to 3 or 5 years) in exchange for pricing concessions.
+   - Propose or accept favorable payment terms (e.g., "Net 60" or "Net 90" instead of standard "Net 30") in exchange for pricing compromises.
+   - Propose or accept high-reliability delivery SLAs (e.g., "99.9% uptime" or "99.5% uptime" delivery SLA guarantees) to incentivize the other party.
+3. Collaborate to find an optimal combination of price point and TCO variables that respects your financial limit while resolving deadlocks.
+
+CRITICAL MESSAGE STYLE INSTRUCTIONS:
+To assist human operators and ensure visual clarity in the trade feed, you MUST apply special formatting marks in your text message:
+1. Use **bold** (e.g., **1200 EUR** or **certified alloy**) to bold key specifications or final proposals.
+2. Use _underscore_ (e.g., _immediate dispatch_ or _premium grade_) to underscore key advantages or features.
+3. Use ~~strikethrough~~ (e.g., ~~1350 EUR~~ or ~~original price~~) when striking through old, rejected, or bypassed numbers/rates.
+4. Use ==highlight== (e.g., ==FINAL OFFER== or =={hidden_limit} EUR==) to highlight critical values, limits, or urgent status.
+
+You MUST respond with a raw JSON object following this exact schema:
+{{
+  "message": "Your professional response, counter-offer, or argument text.",
+  "price_point": 1000,
+  "proposed_warranty_years": 3,
+  "proposed_payment_terms": "Net 60",
+  "proposed_sla_uptime": "99.9%"
+}}
+
+Ensure that "price_point" is an integer representing your current proposed price in EUR (must respect your budget cap {hidden_limit} if Buyer, or floor price {hidden_limit} if Seller).
+Under DISTRIBUTIVE style: "proposed_warranty_years" MUST be 1, "proposed_payment_terms" MUST be "Net 30", "proposed_sla_uptime" MUST be "99.0%".
+Under INTEGRATIVE style: Propose realistic upgraded TCO parameters to sweeten the deal when necessary (e.g., warranty 2 or 3 years, terms "Net 45" or "Net 60", SLA uptime "99.5%" or "99.9%").
+Output ONLY raw JSON. Do not wrap your response in markdown code blocks or backticks.
+"""
+    context_stream = "\n".join(full_transcript)
+    full_prompt = f"Negotiation Context History:\n{context_stream}\n\nExecute your role's calculation step now and generate the JSON response:"
+
+    try:
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=full_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                temperature=0.2,
+                response_mime_type="application/json",
+            )
+        )
+        data = json.loads(response.text)
+        try:
+            price_val = int(data.get("price_point", hidden_limit))
+        except (TypeError, ValueError):
+            price_val = hidden_limit
+
+        return {
+            "message": data.get("message", "We need to re-evaluate our positions."),
+            "price_point": price_val,
+            "proposed_warranty_years": int(data.get("proposed_warranty_years", 1)),
+            "proposed_payment_terms": str(data.get("proposed_payment_terms", "Net 30")),
+            "proposed_sla_uptime": str(data.get("proposed_sla_uptime", "99.0%"))
+        }
+    except Exception as err:
+        print(f"Error in run_group_agent_turn: {err}")
+        return {
+            "message": "We need to re-evaluate our positions regarding current asset valuations.",
+            "price_point": hidden_limit,
+            "proposed_warranty_years": 1,
+            "proposed_payment_terms": "Net 30",
+            "proposed_sla_uptime": "99.0%"
+        }
+
 def generate_agent_turn(
     participant_name: str,
     participant_role: str,
     hidden_floor_ceil: int,
     current_price: int,
     tech_specs: str,
-    chat_history: list[dict]
+    chat_history: list[dict],
+    negotiation_style: str = "DISTRIBUTIVE"
 ) -> dict:
     """
-    Translates main.py exchange state parameters into run_agent_turn's signature.
+    Translates main.py exchange state parameters into run_group_agent_turn's signature.
     Maps offered_price / requested_price back to price_point for unified database persistence.
     """
     role = "Buyer" if participant_role == "BUYER" else "Seller"
@@ -161,26 +262,16 @@ def generate_agent_turn(
         conversation_history.append(f"[{h['sender']} | {h['role']}]: {h['text']}")
         
     # Execute the structured generative step
-    res = run_agent_turn(
+    res = run_group_agent_turn(
         role=role,
-        conversation_history=conversation_history,
-        budget_cap=hidden_floor_ceil
+        agent_name=participant_name,
+        hidden_limit=hidden_floor_ceil,
+        specs=tech_specs,
+        full_transcript=conversation_history,
+        negotiation_style=negotiation_style
     )
     
-    # Retrieve role-specific price key
-    price_key = "offered_price" if role == "Buyer" else "requested_price"
-    price_val = res.get(price_key)
-    
-    # Secure numeric parsing
-    try:
-        price_point = int(price_val)
-    except (TypeError, ValueError):
-        price_point = hidden_floor_ceil
-        
-    return {
-        "message": res.get("message", ""),
-        "price_point": price_point
-    }
+    return res
 
 def extract_json_from_text(text: str) -> dict | None:
     """
@@ -307,7 +398,32 @@ def search_market_valuation_benchmarks(item_name: str) -> str:
 Your task is to compile a highly detailed, clean, and beautifully structured ASCII Market Research Report based on the provided search context.
 Focus on identifying average unit costs, replacement valuation indices, typical supply-chain lead times, and key manufacturing tolerances.
 
-Use professional headers (e.g. #, ##, ###), bold/italic highlights, and clean bullet lists. Do not output raw JSON or code block tags. Ensure the output is readable as a premium document report."""
+CRITICAL REQUIREMENT:
+You MUST calculate and include a structured mathematical ASCII "Should-Cost Analysis" breakdown table at the VERY BEGINNING of your report.
+To do this:
+1. Identify or estimate a standard baseline unit price/market valuation (in EUR) for the target item "{item_name}" based on the search context. If the search context doesn't specify a clear cost, use a realistic industrial baseline estimation (e.g., 1000 EUR or another appropriate typical value for this class of industrial asset). Let's call this the "Estimated Cost Base".
+2. Calculate the following exact allocations based on this Estimated Cost Base:
+   - Raw Materials: 45% of Estimated Cost Base
+   - Labor & Manufacturing Overhead: 25% of Estimated Cost Base
+   - Logistics, Duty & Insurance: 10% of Estimated Cost Base
+   - Supplier Sustainable Margin: 15% of Estimated Cost Base (Target Margin)
+   - Calculated Total Target Fair Value: Sum of these four categories (equal to 95% of Estimated Cost Base).
+3. Present these calculations in a beautifully formatted, structured, monospace ASCII table. For example:
+
++--------------------------------------------+-----------------+
+| Cost Component                             | Cost Allocation |
++--------------------------------------------+-----------------+
+| Raw Materials (45%)                        | [Value] EUR     |
+| Labor & Manufacturing Overhead (25%)       | [Value] EUR     |
+| Logistics, Duty & Insurance (10%)          | [Value] EUR     |
+| Supplier Sustainable Margin (15%)          | [Value] EUR     |
++--------------------------------------------+-----------------+
+| Calculated Total Target Fair Value         | [Value] EUR     |
++--------------------------------------------+-----------------+
+
+Ensure the math is 100% correct, exact, and formatted cleanly.
+
+Use professional headers (e.g. #, ##, ###), bold/italic highlights, and clean bullet lists for the rest of your report. Do not output raw JSON. Ensure the output is readable as a premium document report."""
 
     prompt = f"Asset Target: {item_name}\n\nSearch Context Snippets:\n{raw_search_context}\n\nCompile the Market Research Report:"
     

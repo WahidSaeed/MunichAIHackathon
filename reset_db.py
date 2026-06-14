@@ -31,7 +31,8 @@ with Session(bind=engine) as session:
         status="ACTIVE",
         current_buyer_budget=1200,
         technical_specs=lot_1_intel,
-        perspective="BUYER"
+        perspective="BUYER",
+        negotiation_style="DISTRIBUTIVE"
     )
     session.add(lot_1_deal)
     
@@ -97,7 +98,8 @@ with Session(bind=engine) as session:
         status="ACTIVE",
         current_buyer_budget=2000,
         technical_specs=lot_2_intel,
-        perspective="SELLER"
+        perspective="SELLER",
+        negotiation_style="DISTRIBUTIVE"
     )
     session.add(lot_2_deal)
     

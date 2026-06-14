@@ -14,6 +14,7 @@ class Deal(Base):
     current_buyer_budget = Column(Integer, nullable=True)
     technical_specs = Column(Text, nullable=True)
     perspective = Column(String(50), nullable=True) # BUYER or SELLER
+    negotiation_style = Column(String(50), nullable=False, default="DISTRIBUTIVE") # DISTRIBUTIVE or INTEGRATIVE
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships

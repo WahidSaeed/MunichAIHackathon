@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { 
   Database, 
   Terminal, 
@@ -16,6 +17,7 @@ import {
   X, 
   RefreshCw, 
   Sliders,
+  BarChart3,
   Send,
   Sparkles,
   ShoppingBag,
@@ -28,39 +30,41 @@ import {
   FileText,
   FileSpreadsheet,
   FileImage,
-  Paperclip
+  Paperclip,
+  Download
 } from "lucide-react";
 
 
 const parseInlineMarkdown = (text: string) => {
   let parts: React.ReactNode[] = [text];
+  let keyCounter = 0;
   
   // Parse **bold**
   parts = parts.flatMap((part) => {
     if (typeof part !== "string") return part;
     const pieces = part.split(/\*\*([^*]+)\*\*/g);
-    return pieces.map((piece, i) => (i % 2 === 1 ? <strong key={i} className="font-bold text-[#111111]">{piece}</strong> : piece));
+    return pieces.map((piece, i) => (i % 2 === 1 ? <strong key={`b-${keyCounter++}`} className="font-bold text-[#111111]">{piece}</strong> : piece));
   });
 
   // Parse *italic*
   parts = parts.flatMap((part) => {
     if (typeof part !== "string") return part;
     const pieces = part.split(/\*([^*]+)\*/g);
-    return pieces.map((piece, i) => (i % 2 === 1 ? <em key={i} className="italic text-gray-800">{piece}</em> : piece));
+    return pieces.map((piece, i) => (i % 2 === 1 ? <em key={`it-${keyCounter++}`} className="italic text-gray-800">{piece}</em> : piece));
   });
 
   // Parse __underline__
   parts = parts.flatMap((part) => {
     if (typeof part !== "string") return part;
     const pieces = part.split(/__([^_]+)__/g);
-    return pieces.map((piece, i) => (i % 2 === 1 ? <span key={i} className="underline decoration-[#111111] underline-offset-2">{piece}</span> : piece));
+    return pieces.map((piece, i) => (i % 2 === 1 ? <span key={`u2-${keyCounter++}`} className="underline decoration-[#111111] underline-offset-2">{piece}</span> : piece));
   });
 
   // Parse _italic_
   parts = parts.flatMap((part) => {
     if (typeof part !== "string") return part;
     const pieces = part.split(/_([^_]+)_/g);
-    return pieces.map((piece, i) => (i % 2 === 1 ? <em key={i} className="italic text-gray-800">{piece}</em> : piece));
+    return pieces.map((piece, i) => (i % 2 === 1 ? <em key={`u1-${keyCounter++}`} className="italic text-gray-800">{piece}</em> : piece));
   });
 
   return parts;
@@ -148,12 +152,14 @@ interface Deal {
   created_at: string;
   participants: Participant[];
   messages: Message[];
+  negotiation_style: string;
 }
 
 const renderFormattedText = (text: string) => {
   if (!text) return null;
 
   let parts: React.ReactNode[] = [text];
+  let keyCounter = 0;
 
   // 1. Parse highlight: ==highlight==
   parts = parts.flatMap((part) => {
@@ -162,7 +168,7 @@ const renderFormattedText = (text: string) => {
     return pieces.map((piece, i) =>
       i % 2 === 1 ? (
         <mark
-          key={i}
+          key={`hl-${keyCounter++}`}
           className="bg-yellow-200 text-black px-1 font-bold border-b border-yellow-500 rounded-none inline-block leading-none"
         >
           {piece}
@@ -179,7 +185,7 @@ const renderFormattedText = (text: string) => {
     const pieces = part.split(/\*\*([^*]+)\*\*/g);
     return pieces.map((piece, i) =>
       i % 2 === 1 ? (
-        <strong key={i} className="font-bold text-[#111111]">
+        <strong key={`b-${keyCounter++}`} className="font-bold text-[#111111]">
           {piece}
         </strong>
       ) : (
@@ -194,7 +200,7 @@ const renderFormattedText = (text: string) => {
     const pieces = part.split(/~~([^~]+)~~/g);
     return pieces.map((piece, i) =>
       i % 2 === 1 ? (
-        <span key={i} className="line-through opacity-60">
+        <span key={`st-${keyCounter++}`} className="line-through opacity-60">
           {piece}
         </span>
       ) : (
@@ -209,7 +215,7 @@ const renderFormattedText = (text: string) => {
     const pieces = part.split(/__([^_]+)__/g);
     return pieces.map((piece, i) =>
       i % 2 === 1 ? (
-        <span key={i} className="underline decoration-[#111111] underline-offset-2 font-semibold">
+        <span key={`u2-${keyCounter++}`} className="underline decoration-[#111111] underline-offset-2 font-semibold">
           {piece}
         </span>
       ) : (
@@ -224,7 +230,7 @@ const renderFormattedText = (text: string) => {
     const pieces = part.split(/_([^_]+)_/g);
     return pieces.map((piece, i) =>
       i % 2 === 1 ? (
-        <span key={i} className="underline decoration-[#111111] underline-offset-2">
+        <span key={`u1-${keyCounter++}`} className="underline decoration-[#111111] underline-offset-2">
           {piece}
         </span>
       ) : (
@@ -236,7 +242,7 @@ const renderFormattedText = (text: string) => {
   return <>{parts}</>;
 };
 
-export default function Home() {
+function HomeContent() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [newLotName, setNewLotName] = useState("");
@@ -245,6 +251,7 @@ export default function Home() {
   const [operatorMsg, setOperatorMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [stepping, setStepping] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showLotForm, setShowLotForm] = useState(false);
   const [activeDrawer, setActiveDrawer] = useState<"BUYER" | "SELLER" | null>("BUYER");
@@ -259,6 +266,7 @@ export default function Home() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const prevActiveDealIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef<number>(0);
+  const isProcessingRef = useRef<boolean>(false);
 
   // Real-time telemetry monitoring states
   const [pioneerStream, setPioneerStream] = useState<any[]>([]);
@@ -277,6 +285,274 @@ export default function Home() {
   }, []);
 
   const activeDeal = deals.find(d => d.id === activeDealId) || null;
+
+  const handleDownloadPDF = () => {
+    if (!activeDeal) return;
+
+    // Create a hidden iframe
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "none";
+    iframe.style.zIndex = "-1000";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) return;
+
+    const convertMarkdownToHtml = (text: string) => {
+      if (!text) return "";
+      
+      const parseInline = (str: string) => {
+        let html = str;
+        html = html
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+          
+        // ==highlight==
+        html = html.replace(/==([^=]+)==/g, "<mark style='background-color: #fef08a; border-bottom: 2px solid #eab308; font-weight: bold; color: #000; padding: 0 4px;'>$1</mark>");
+        // **bold**
+        html = html.replace(/\*\*([^*]+)\*\*/g, "<strong style='font-weight: bold; color: #111;'>$1</strong>");
+        // __underline__
+        html = html.replace(/__([^_]+)__/g, "<u style='text-decoration: underline; text-underline-offset: 2px;'>$1</u>");
+        // *italic*
+        html = html.replace(/\*([^*]+)\*/g, "<em style='font-style: italic; color: #374151;'>$1</em>");
+        // _italic_
+        html = html.replace(/_([^_]+)_/g, "<em style='font-style: italic; color: #374151;'>$1</em>");
+        // ~~strikethrough~~
+        html = html.replace(/~~([^~]+)~~/g, "<del style='text-decoration: line-through; color: #9ca3af;'>$1</del>");
+        
+        return html;
+      };
+
+      const lines = text.split("\n");
+      let result = "";
+      
+      lines.forEach((line) => {
+        let trimmed = line.trim();
+        if (!trimmed) {
+          result += "<br/>";
+          return;
+        }
+        
+        // Horizontal Rule
+        if (trimmed.startsWith("===") || trimmed.startsWith("---")) {
+          result += "<hr style='border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;' />";
+          return;
+        }
+        
+        // Headings
+        if (trimmed.startsWith("# ")) {
+          result += `<h1 style="font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: #111111; margin-top: 24px; margin-bottom: 8px; border-bottom: 2px solid #111111; padding-bottom: 4px; font-family: monospace;">${parseInline(trimmed.slice(2))}</h1>`;
+          return;
+        }
+        if (trimmed.startsWith("## ")) {
+          result += `<h2 style="font-size: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: #111111; margin-top: 20px; margin-bottom: 8px; border-left: 3px solid #111111; padding-left: 8px; font-family: monospace;">${parseInline(trimmed.slice(3))}</h2>`;
+          return;
+        }
+        if (trimmed.startsWith("### ")) {
+          result += `<h3 style="font-size: 10px; font-weight: bold; text-transform: uppercase; color: #4b5563; margin-top: 16px; margin-bottom: 4px; letter-spacing: 0.05em; font-family: monospace;">${parseInline(trimmed.slice(4))}</h3>`;
+          return;
+        }
+        
+        // Bullet Points
+        if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+          result += `<div style="display: flex; align-items: start; margin-left: 8px; margin-top: 4px; margin-bottom: 4px; font-family: monospace;">
+            <span style="font-weight: bold; color: #6b7280; margin-right: 6px;">•</span>
+            <span style="font-size: 10px; color: #374151; line-height: 1.5; font-family: monospace;">${parseInline(trimmed.slice(2))}</span>
+          </div>`;
+          return;
+        }
+        
+        // Default line
+        result += `<p style="font-size: 10px; line-height: 1.5; color: #374151; margin-top: 4px; margin-bottom: 4px; font-family: monospace;">${parseInline(line)}</p>`;
+      });
+      
+      return result;
+    };
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>LOT SPECIFICATIONS - ${activeDeal.item_name}</title>
+        <style>
+          @media print {
+            body {
+              margin: 0;
+              padding: 0;
+              background: #fff;
+              color: #111111;
+            }
+            @page {
+              size: letter portrait;
+              margin: 20mm 15mm;
+            }
+          }
+          body {
+            font-family: 'Courier New', Courier, monospace;
+            color: #111111;
+            line-height: 1.5;
+            font-size: 11px;
+            background: #ffffff;
+            padding: 0;
+            margin: 0;
+          }
+          .container {
+            max-width: 800px;
+            margin: 0 auto;
+          }
+          .header-title {
+            font-size: 18px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding-bottom: 5px;
+            border-bottom: 4px solid #111111;
+          }
+          .header-subtitle {
+            font-size: 10px;
+            font-weight: bold;
+            color: #666666;
+            margin-top: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          .meta-box {
+            border: 1px solid #111111;
+            padding: 12px;
+            margin-top: 20px;
+            margin-bottom: 25px;
+            background-color: #fafafa;
+          }
+          .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px 20px;
+          }
+          .meta-item {
+            font-size: 10px;
+          }
+          .meta-label {
+            font-weight: bold;
+            color: #555555;
+            text-transform: uppercase;
+            display: inline-block;
+            width: 140px;
+          }
+          .meta-value {
+            font-weight: bold;
+            color: #111111;
+          }
+          .specs-title {
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+            border-bottom: 1px double #111111;
+            padding-bottom: 3px;
+          }
+          .content {
+            margin-top: 15px;
+          }
+          .footer {
+            margin-top: 40px;
+            border-top: 1px solid #111111;
+            padding-top: 10px;
+            font-size: 8px;
+            color: #777777;
+            text-transform: uppercase;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+          }
+          .stamp-box {
+            border: 2px dashed #111111;
+            padding: 10px;
+            margin-top: 30px;
+            text-align: center;
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-size: 9px;
+            background: #fbfbfb;
+            page-break-inside: avoid;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div>
+            <div class="header-title">ATIRA PROCUREMENT COVENANT SPECIFICATION</div>
+            <div class="header-subtitle">Official Transaction Room Asset Dossier & Protocol Record</div>
+          </div>
+          
+          <div class="meta-box">
+            <div class="meta-grid">
+              <div class="meta-item">
+                <span class="meta-label">TRANSACTION UUID:</span>
+                <span class="meta-value">${activeDeal.id.toUpperCase()}</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">TIMESTAMP:</span>
+                <span class="meta-value">${new Date().toLocaleString("en-US", { timeZoneName: "short" })}</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">ASSET CODE:</span>
+                <span class="meta-value">${activeDeal.item_name}</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">STATUS KEY:</span>
+                <span class="meta-value">${activeDeal.status}</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">STANCE / PERSPECTIVE:</span>
+                <span class="meta-value">${activeDeal.perspective === "BUYER" ? "BUYER PERSPECTIVE" : "SELLER PERSPECTIVE"}</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">SECURITY CLEARANCE:</span>
+                <span class="meta-value">LEVEL 4 ROOT ESCROW OPERATOR</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="specs-title">INJECTED LOT CONTRACT SPECIFICATIONS REPORT</div>
+          <div class="content">
+            ${convertMarkdownToHtml(activeDeal.technical_specs)}
+          </div>
+          
+          <div class="stamp-box">
+            ESCROW STATUS SECURED // VERIFIED BY ATIRA PROCUREMENT INDEX PROTOCOL v1.0 // NO REFUNDS OR RETRACTIONS ALLOWED AFTER BID/ASK MATCHING
+          </div>
+          
+          <div class="footer">
+            <span>SYSTEM REFERENCE: ${activeDeal.id.slice(0, 16).toUpperCase()}</span>
+            <span>ATIRA INTELLECTUAL PROPERTY &copy; ${new Date().getFullYear()}</span>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+
+    // Give style elements a moment to register/load
+    iframe.contentWindow?.focus();
+    setTimeout(() => {
+      iframe.contentWindow?.print();
+      // Remove iframe from DOM after the print dialog closes (or standard timeout)
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 1000);
+    }, 500);
+  };
 
   // Fetch all deals from backend API
   const fetchDeals = async (selectFirst = false) => {
@@ -310,6 +586,32 @@ export default function Home() {
     }
   };
 
+  // Update active deal sourcing style
+  const handleUpdateStyle = async (style: string) => {
+    if (!activeDealId || !activeDeal) return;
+    if (activeDeal.status !== "ACTIVE") {
+      console.warn("Negotiation style can only be updated for active rooms.");
+      return;
+    }
+    try {
+      const res = await fetch("http://localhost:8080/api/deals/update-style", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deal_id: activeDealId,
+          negotiation_style: style,
+        }),
+      });
+      if (res.ok) {
+        await fetchDeals();
+      } else {
+        console.error("Failed to update style:", await res.text());
+      }
+    } catch (e) {
+      console.error("Error updating style:", e);
+    }
+  };
+
 
 
   useEffect(() => {
@@ -323,6 +625,67 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [activeDealId]);
 
+  // Automated continuous negotiation loop with simulated typing delay
+  useEffect(() => {
+    if (!activeDealId || !activeDeal) {
+      setIsTyping(false);
+      isProcessingRef.current = false;
+      return;
+    }
+
+    if (activeDeal.status !== "ACTIVE" || isProcessingRef.current || stepping) {
+      return;
+    }
+
+    const messages = activeDeal.messages;
+    if (!messages || messages.length === 0) {
+      return;
+    }
+
+    const lastMsg = messages[messages.length - 1];
+    const perspective = activeDeal.perspective;
+
+    // AI agent should respond if the last message is from the human role or the system
+    let shouldAiRespond = false;
+    if (perspective === "BUYER") {
+      shouldAiRespond = lastMsg.role === "BUYER" || lastMsg.role === "OPERATOR" || lastMsg.role === "SYSTEM";
+    } else if (perspective === "SELLER") {
+      shouldAiRespond = lastMsg.role === "SELLER" || lastMsg.role === "OPERATOR" || lastMsg.role === "SYSTEM";
+    }
+
+    if (shouldAiRespond) {
+      isProcessingRef.current = true;
+      setIsTyping(true);
+      const delay = Math.floor(Math.random() * 9000) + 1000; // between 1 and 10 seconds
+
+      const timer = setTimeout(async () => {
+        try {
+          if (activeDealId) {
+            setStepping(true);
+            const res = await fetch("http://localhost:8080/api/negotiate/step", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ deal_id: activeDealId })
+            });
+            await fetchDeals();
+          }
+        } catch (e) {
+          console.error("Error in continuous negotiation loop step:", e);
+        } finally {
+          setStepping(false);
+          setIsTyping(false);
+          isProcessingRef.current = false;
+        }
+      }, delay);
+
+      return () => {
+        clearTimeout(timer);
+        isProcessingRef.current = false;
+        setIsTyping(false);
+      };
+    }
+  }, [activeDealId, activeDeal?.status, activeDeal?.messages?.length, activeDeal?.perspective, stepping]);
+
   // Auto-scroll chat feed to the bottom ONLY on active deal change or actual new messages
   useEffect(() => {
     if (!activeDeal) return;
@@ -331,7 +694,7 @@ export default function Home() {
     const dealChanged = activeDeal.id !== prevActiveDealIdRef.current;
     const newMessageAdded = currentMessageCount > prevMessageCountRef.current;
 
-    if (dealChanged || newMessageAdded) {
+    if (dealChanged || newMessageAdded || isTyping) {
       if (chatEndRef.current) {
         chatEndRef.current.scrollIntoView({ behavior: "smooth" });
       }
@@ -340,7 +703,7 @@ export default function Home() {
     } else {
       prevMessageCountRef.current = currentMessageCount;
     }
-  }, [activeDeal?.messages, activeDeal?.id]);
+  }, [activeDeal?.messages, activeDeal?.id, isTyping]);
 
   // Create a new B2B Lot (Deal Channel)
   const handleCreateLot = async (e: React.FormEvent) => {
@@ -619,7 +982,7 @@ export default function Home() {
         </div>
         <div className="flex justify-between items-center w-full font-mono text-[8px] text-gray-400">
           <span>BUDGET: {d.current_buyer_budget} EUR</span>
-          <span className="flex items-center gap-0.5">
+          <span className="flex items-center gap-0.5" suppressHydrationWarning>
             <Clock className="h-2 w-2" />
             {new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
@@ -838,6 +1201,52 @@ export default function Home() {
                   )}
             </div>
 
+            {/* ACTIVE SOURCING STYLE TOGGLE */}
+            {activeDeal && (
+              <div className="border border-[#111111] bg-white p-2 flex flex-col space-y-1.5 font-mono shrink-0">
+                <div className="flex items-center justify-between text-[8px] font-bold text-gray-500 uppercase tracking-wider">
+                  <span>ACTIVE SOURCING STYLE</span>
+                  <span className="text-[#111111] bg-gray-100 px-1 border border-[#111111] text-[7px] leading-tight">
+                    {activeDeal.negotiation_style || "DISTRIBUTIVE"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-1">
+                  <button
+                    type="button"
+                    disabled={activeDeal.status !== "ACTIVE"}
+                    onClick={() => handleUpdateStyle("DISTRIBUTIVE")}
+                    className={`py-1 text-[8px] font-bold uppercase border transition-all duration-100 ${
+                      activeDeal.status !== "ACTIVE"
+                        ? (activeDeal.negotiation_style || "DISTRIBUTIVE") === "DISTRIBUTIVE"
+                          ? "bg-gray-400 text-white border-gray-400 cursor-not-allowed opacity-60"
+                          : "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+                        : (activeDeal.negotiation_style || "DISTRIBUTIVE") === "DISTRIBUTIVE"
+                        ? "bg-[#111111] text-white border-[#111111] cursor-pointer"
+                        : "bg-[#fafafa] text-gray-500 border-gray-200 hover:border-[#111111] hover:text-[#111111] cursor-pointer"
+                    }`}
+                  >
+                    DISTRIBUTIVE
+                  </button>
+                  <button
+                    type="button"
+                    disabled={activeDeal.status !== "ACTIVE"}
+                    onClick={() => handleUpdateStyle("INTEGRATIVE")}
+                    className={`py-1 text-[8px] font-bold uppercase border transition-all duration-100 ${
+                      activeDeal.status !== "ACTIVE"
+                        ? activeDeal.negotiation_style === "INTEGRATIVE"
+                          ? "bg-gray-400 text-white border-gray-400 cursor-not-allowed opacity-60"
+                          : "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
+                        : activeDeal.negotiation_style === "INTEGRATIVE"
+                        ? "bg-[#111111] text-white border-[#111111] cursor-pointer"
+                        : "bg-[#fafafa] text-gray-500 border-gray-200 hover:border-[#111111] hover:text-[#111111] cursor-pointer"
+                    }`}
+                  >
+                    INTEGRATIVE
+                  </button>
+                </div>
+              </div>
+            )}
+
             {loading ? (
               <div className="p-4 text-center font-mono text-xs text-gray-400 shrink-0">
                 LOADING DATABASE CHANNELS...
@@ -1020,6 +1429,15 @@ export default function Home() {
               )}
               
               <Link
+                href="/dashboard"
+                className="font-mono text-[10px] font-bold uppercase border border-[#111111] px-2.5 py-1 bg-white text-[#111111] hover:bg-[#111111] hover:text-white flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(17,17,17,1)] hover:shadow-[2px_2px_0px_rgba(17,17,17,0.1)] transition-all relative animate-fade-in"
+                title="Interactive Data Analytics Dashboard"
+              >
+                <BarChart3 className="h-3.5 w-3.5 text-[#111111] hover:text-white" />
+                <span>Dashboard</span>
+              </Link>
+
+              <Link
                 href="/observability"
                 className="font-mono text-[10px] font-bold uppercase border border-[#111111] px-2.5 py-1 bg-[#111111] text-white hover:bg-white hover:text-[#111111] flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(17,17,17,1)] hover:shadow-[2px_2px_0px_rgba(17,17,17,0.1)] transition-all relative animate-fade-in"
                 title="System Observability Dashboard"
@@ -1040,7 +1458,8 @@ export default function Home() {
               {/* CHAT MESSAGES SCROLL VIEW */}
               <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
                 {activeDeal ? (
-                  activeDeal.messages.map((m) => {
+                  <>
+                    {activeDeal.messages.map((m) => {
                     const isBuyer = m.role === "BUYER";
                     const isSeller = m.role === "SELLER";
                     const isOperator = m.role === "OPERATOR";
@@ -1053,6 +1472,23 @@ export default function Home() {
                     else if (m.sender_name === "Seller Agent" || m.sender_name === "Seller" || m.sender_name === "Seller (You)") avatarText = "SL";
                     else if (m.sender_name.startsWith("Operator")) avatarText = "OP";
                     else if (m.sender_name.startsWith("System")) avatarText = "SYS";
+
+                    // Parse TCO parameters
+                    const tcoRegex = /^\[Offer:\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^\]]+)\]\s*(.*)$/s;
+                    const match = m.message_text.match(tcoRegex);
+                    
+                    let displayMessage = m.message_text;
+                    let tcoParams = null;
+                    
+                    if (match) {
+                      tcoParams = {
+                        offer: match[1].trim(),
+                        warranty: match[2].trim(),
+                        payment: match[3].trim(),
+                        sla: match[4].trim()
+                      };
+                      displayMessage = match[5].trim();
+                    }
 
                     return (
                       <div key={m.id} className="flex gap-3 items-start animate-fade-in">
@@ -1089,20 +1525,72 @@ export default function Home() {
                             <span className="font-mono text-[10px] font-bold uppercase tracking-wider">
                               {m.sender_name} | {m.role}
                             </span>
-                            <span className="font-mono text-[8px] opacity-60">
+                            <span className="font-mono text-[8px] opacity-60" suppressHydrationWarning>
                               {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                             </span>
                           </div>
                           
+                          {/* TCO CHIPS GRID */}
+                          {tcoParams && (
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-2.5 font-mono">
+                              <div className="border border-current p-1.5 flex flex-col opacity-90">
+                                <span className="text-[6.5px] font-bold uppercase tracking-wider opacity-60">OFFER PRICE</span>
+                                <span className="text-[9.5px] font-bold">{tcoParams.offer}</span>
+                              </div>
+                              <div className="border border-current p-1.5 flex flex-col opacity-90">
+                                <span className="text-[6.5px] font-bold uppercase tracking-wider opacity-60">WARRANTY</span>
+                                <span className="text-[9.5px] font-bold">{tcoParams.warranty}</span>
+                              </div>
+                              <div className="border border-current p-1.5 flex flex-col opacity-90">
+                                <span className="text-[6.5px] font-bold uppercase tracking-wider opacity-60">PAYMENT</span>
+                                <span className="text-[9.5px] font-bold">{tcoParams.payment}</span>
+                              </div>
+                              <div className="border border-current p-1.5 flex flex-col opacity-90">
+                                <span className="text-[6.5px] font-bold uppercase tracking-wider opacity-60">DELIVERY SLA</span>
+                                <span className="text-[9.5px] font-bold">{tcoParams.sla}</span>
+                              </div>
+                            </div>
+                          )}
+                          
                           {/* BODY CONTENT */}
                           <p className="text-xs font-mono leading-relaxed whitespace-pre-wrap">
-                            {renderFormattedText(m.message_text)}
+                            {renderFormattedText(displayMessage)}
                           </p>
                         </div>
 
                       </div>
                     );
-                  })
+                  })}
+
+                    {isTyping && (
+                      <div className="flex gap-3 items-start animate-fade-in">
+                        {/* AVATAR TOKEN */}
+                        <div className="h-8 w-8 shrink-0 flex items-center justify-center font-mono text-[10px] font-bold border bg-white text-gray-800 border-gray-400">
+                          [{activeDeal.perspective === "BUYER" ? "SL" : "BY"}]
+                        </div>
+
+                        {/* MESSAGE BUBBLE */}
+                        <div className="flex-1 border p-3 bg-white border-gray-300 text-gray-800 max-w-[200px]">
+                          {/* HEADER */}
+                          <div className="flex justify-between items-center mb-1 border-b border-dashed border-current pb-1 opacity-80">
+                            <span className="font-mono text-[10px] font-bold uppercase tracking-wider">
+                              {activeDeal.perspective === "BUYER" ? "Seller Agent" : "Buyer Agent"} | {activeDeal.perspective === "BUYER" ? "SELLER" : "BUYER"}
+                            </span>
+                          </div>
+                          
+                          {/* BODY CONTENT */}
+                          <div className="flex items-center gap-1.5 py-1">
+                            <span className="font-mono text-[9px] text-[#111111] uppercase tracking-wider font-bold">WRITING</span>
+                            <span className="flex gap-1 items-center">
+                              <span className="h-1.5 w-1.5 bg-[#111111] animate-pulse" style={{ animationDelay: "0ms" }}></span>
+                              <span className="h-1.5 w-1.5 bg-[#111111] animate-pulse" style={{ animationDelay: "150ms" }}></span>
+                              <span className="h-1.5 w-1.5 bg-[#111111] animate-pulse" style={{ animationDelay: "300ms" }}></span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="h-full w-full flex flex-col items-center justify-center text-center p-8 border border-dashed border-gray-300">
                     <Database className="h-8 w-8 text-gray-300 mb-2" />
@@ -1170,28 +1658,29 @@ export default function Home() {
                         </button>
                       </form>
 
-                      {/* STEP EXCHANGE ROUND ACTION TRIGGER BUTTON */}
-                      <button
-                        onClick={handleStepExchange}
-                        disabled={stepping || activeDeal.status !== "ACTIVE"}
-                        className={`px-5 py-2.5 font-mono text-xs font-bold uppercase border border-[#111111] flex items-center gap-2 transition-all duration-100 ${
+                      {/* AUTO-NEGOTIATING ENGINE STATUS CHIP */}
+                      <div
+                        className={`px-5 py-2.5 font-mono text-xs font-bold uppercase border border-[#111111] flex items-center gap-2 select-none ${
                           activeDeal.status === "ACTIVE" 
-                            ? "bg-[#111111] text-white hover:bg-gray-800 shadow-[2px_2px_0px_rgba(17,17,17,1)] active:translate-y-0.5 active:shadow-[1px_1px_0px_rgba(17,17,17,1)]" 
-                            : "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
+                            ? "bg-slate-50 text-[#111111] shadow-[2px_2px_0px_rgba(17,17,17,1)]" 
+                            : "bg-gray-100 border-gray-300 text-gray-400"
                         }`}
                       >
-                        {stepping ? (
+                        {activeDeal.status === "ACTIVE" ? (
                           <>
-                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                            CALCULATING TURNS...
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                            <span>AUTO-NEGOTIATING</span>
                           </>
                         ) : (
                           <>
-                            <Play className="h-3.5 w-3.5 fill-current" />
-                            STEP EXCHANGE ROUND
+                            <span className="h-2 w-2 bg-gray-400"></span>
+                            <span>ENGINE INACTIVE</span>
                           </>
                         )}
-                      </button>
+                      </div>
 
                     </div>
                   </div>
@@ -1215,129 +1704,192 @@ export default function Home() {
 
           {activeDeal ? (
             <>
-              {/* TOP LEDGER SECTIONS */}
-              <div className="flex-none overflow-y-auto space-y-4 max-h-[45%] pr-1 min-h-0 shrink-0">
-                {/* CURRENT ACTIVE OFFER SPREAD BOX */}
-                <div className="border border-[#111111] p-3 bg-[#fafafa]">
-                  <div className="flex justify-between items-center">
-                    <span className="font-mono text-[10px] font-bold text-gray-500 uppercase">
-                      ACTIVE BOOK SPREAD:
+              {/* BLOCK 1: ACTIVE STRATEGY */}
+              <div className="border border-[#111111] bg-white p-3 font-mono shrink-0">
+                <div className="flex justify-between items-center border-b border-[#111111] pb-1.5 mb-1.5">
+                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">ACTIVE NEGOTIATION STYLE</span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 border ${
+                    activeDeal.negotiation_style === "INTEGRATIVE"
+                      ? "bg-[#111111] text-white border-[#111111]"
+                      : "bg-white text-[#111111] border-[#111111]"
+                  }`}>
+                    {activeDeal.negotiation_style || "DISTRIBUTIVE"}
+                  </span>
+                </div>
+                <div className="text-[9px] leading-relaxed text-gray-600 uppercase">
+                  {activeDeal.negotiation_style === "INTEGRATIVE" ? (
+                    <span>
+                      COLLABORATIVE WIN-WIN MODE. AGENTS ENGAGE IN MULTI-VARIABLE TRADING (WARRANTIES, TERMS, SLAS) TO MAXIMIZE VALUE AND OVERCOME PRICE IMPASSES.
                     </span>
-                    <span className="font-mono text-sm font-bold text-[#111111] bg-white border border-[#111111] px-1.5 py-0.5 select-all">
-                      {spread}
+                  ) : (
+                    <span>
+                      TRANSACTIONAL WIN-LOSE MODE. AGENTS FOCUS SOLELY ON DIRECT COST REDUCTION, MAXIMUM BUDGET CAPS, AND RETALIATORY CONCESSION PATTERNS.
                     </span>
-                  </div>
-                  {activeDeal.status === "DEADLOCK" && (
-                    <div className="mt-2.5 border border-red-500 bg-red-50 p-2 text-red-800 flex gap-2 items-start">
-                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                      <span className="font-mono text-[9px] font-bold leading-normal uppercase">
-                        CRITICAL DEADLOCK STALL: ALL OFFERS HAVE REACHED ABSOLUTE CAP AND FLOOR LIMITS.
-                      </span>
-                    </div>
-                  )}
-                  {activeDeal.status === "MATCHED" && (
-                    <div className="mt-2.5 border border-emerald-500 bg-emerald-50 p-2 text-emerald-800 flex gap-2 items-start">
-                      <Check className="h-4 w-4 shrink-0 mt-0.5" />
-                      <span className="font-mono text-[9px] font-bold leading-normal uppercase">
-                        SETTLEMENT MATCH CONFIRMED: CONTRACT HAS BEEN ESCROW REGISTERED.
-                      </span>
-                    </div>
                   )}
                 </div>
-
-                {/* TRADING LEDGER SPLIT GRID */}
-                <div className="space-y-4">
-                  
-                  {/* BUYERS LEDGER (BIDS) */}
-                  <div>
-                    <div className="font-mono text-[10px] font-bold text-[#111111] border-b border-dashed border-gray-400 pb-1 mb-2 uppercase tracking-wide">
-                      BUYER POSITION (BID)
-                    </div>
-                    <div className="space-y-1.5">
-                      {bids.map((b) => {
-                        const isHumanBid = b.name === "Buyer (You)";
-                        return (
-                          <div 
-                            key={b.id} 
-                            className={`border p-2 text-xs font-mono flex justify-between items-center ${
-                              isHumanBid
-                                ? "border-amber-500 bg-amber-50/40 font-bold"
-                                : "border-blue-200 bg-blue-50/20"
-                            }`}
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              <span className={isHumanBid ? "text-amber-950" : "text-blue-900"}>{b.name}</span>
-                              <span className={`text-[9px] uppercase ${isHumanBid ? "text-amber-800" : "text-blue-500"}`}>
-                                BUDGET CAP: {b.hidden_floor_ceil} EUR
-                              </span>
-                            </div>
-                            <span className={`text-xs font-bold px-2 py-1 border ${
-                              isHumanBid 
-                                ? "text-amber-950 bg-white border-amber-500" 
-                                : "text-gray-900 bg-white border-blue-300"
-                            }`}>
-                              {b.current_price_point ? `${b.current_price_point} EUR` : "NO OFFER"}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
+                
+                {activeDeal.status === "DEADLOCK" && (
+                  <div className="mt-2.5 border border-red-500 bg-red-50 p-2 text-red-800 flex gap-2 items-start">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span className="font-mono text-[9px] font-bold leading-normal uppercase">
+                      CRITICAL DEADLOCK STALL: ALL OFFERS HAVE REACHED ABSOLUTE CAP AND FLOOR LIMITS.
+                    </span>
                   </div>
-
-                  {/* SELLERS LEDGER (ASKS) */}
-                  <div>
-                    <div className="font-mono text-[10px] font-bold text-[#111111] border-b border-dashed border-gray-400 pb-1 mb-2 uppercase tracking-wide">
-                      SELLER POSITION (ASK)
-                    </div>
-                    <div className="space-y-1.5">
-                      {asks.map((s) => {
-                        const isHumanAsk = s.name === "Seller (You)";
-                        return (
-                          <div 
-                            key={s.id} 
-                            className={`border p-2 text-xs font-mono flex justify-between items-center ${
-                              isHumanAsk
-                                ? "border-amber-500 bg-amber-50/40 font-bold"
-                                : "border-gray-300 bg-white"
-                            }`}
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              <span className={isHumanAsk ? "text-amber-950" : "text-gray-800"}>{s.name}</span>
-                              <span className={`text-[9px] uppercase ${isHumanAsk ? "text-amber-800" : "text-gray-400"}`}>
-                                RESERVATION FLOOR: {s.hidden_floor_ceil} EUR
-                              </span>
-                            </div>
-                            <span className={`text-xs font-bold px-2 py-1 border ${
-                              isHumanAsk
-                                ? "text-amber-950 bg-white border-amber-500"
-                                : "text-gray-900 bg-[#fafafa] border-gray-400"
-                            }`}>
-                              {s.current_price_point ? `${s.current_price_point} EUR` : "NO OFFER"}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
+                )}
+                {activeDeal.status === "MATCHED" && (
+                  <div className="mt-2.5 border border-emerald-500 bg-emerald-50 p-2 text-emerald-800 flex gap-2 items-start">
+                    <Check className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span className="font-mono text-[9px] font-bold leading-normal uppercase">
+                      SETTLEMENT MATCH CONFIRMED: CONTRACT HAS BEEN ESCROW REGISTERED.
+                    </span>
                   </div>
+                )}
+              </div>
 
+              {/* BLOCK 2: COGNITIVE SOURCING STRATEGY PARAMETERS */}
+              <div className="border border-[#111111] bg-[#fafafa] p-3 font-mono shrink-0 flex flex-col space-y-2">
+                <div className="font-mono text-[9px] font-bold text-[#111111] border-b border-dashed border-gray-400 pb-1 uppercase tracking-wider">
+                  COGNITIVE SHOULD-COST CALCULATOR
+                </div>
+                
+                {/* Math Table */}
+                <table className="w-full text-[8px] border-collapse font-mono border border-gray-300 bg-white">
+                  <thead>
+                    <tr className="bg-gray-100 text-[#111111] border-b border-gray-300">
+                      <th className="p-1 text-left uppercase font-bold">SEGMENT</th>
+                      <th className="p-1 text-right uppercase font-bold font-mono">RATIO</th>
+                      <th className="p-1 text-right uppercase font-bold">VALUE</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-gray-200">
+                      <td className="p-1 text-left">RAW MATERIALS</td>
+                      <td className="p-1 text-right">45%</td>
+                      <td className="p-1 text-right font-bold text-gray-900">{(activeDeal.current_buyer_budget * 0.45).toFixed(1)} EUR</td>
+                    </tr>
+                    <tr className="border-b border-gray-200">
+                      <td className="p-1 text-left">LABOR & OVERHEAD</td>
+                      <td className="p-1 text-right">25%</td>
+                      <td className="p-1 text-right font-bold text-gray-900">{(activeDeal.current_buyer_budget * 0.25).toFixed(1)} EUR</td>
+                    </tr>
+                    <tr className="border-b border-gray-200">
+                      <td className="p-1 text-left">LOGISTICS & DUTY</td>
+                      <td className="p-1 text-right">10%</td>
+                      <td className="p-1 text-right font-bold text-gray-900">{(activeDeal.current_buyer_budget * 0.10).toFixed(1)} EUR</td>
+                    </tr>
+                    <tr className="border-b border-gray-200">
+                      <td className="p-1 text-left">SUPPLIER MARGIN</td>
+                      <td className="p-1 text-right">15%</td>
+                      <td className="p-1 text-right font-bold text-gray-900">{(activeDeal.current_buyer_budget * 0.15).toFixed(1)} EUR</td>
+                    </tr>
+                    <tr className="bg-gray-50 border-t border-gray-300">
+                      <td className="p-1 text-left font-bold text-[#111111]">FAIR TARGET VALUE</td>
+                      <td className="p-1 text-right font-bold">95%</td>
+                      <td className="p-1 text-right font-bold text-[#111111]">{(activeDeal.current_buyer_budget * 0.95).toFixed(1)} EUR</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                {/* BATNA & CONCESSIONS INFO */}
+                <div className="space-y-1 border-t border-dashed border-gray-300 pt-2 text-[8px] leading-tight text-gray-500 uppercase">
+                  <div className="flex justify-between">
+                    <span>BATNA THRESHOLD:</span>
+                    <span className="font-bold text-gray-800 select-all">
+                      {activeDeal.current_buyer_budget} EUR
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-start">
+                    <span>VOLUME CONCESSION PROMISE:</span>
+                    {activeDeal.negotiation_style === "INTEGRATIVE" ? (
+                      <span className="font-bold text-emerald-700 text-right">
+                        ACTIVE (-12% SCALE DISCOUNT SECURED)
+                      </span>
+                    ) : (
+                      <span className="font-bold text-gray-400 text-right">
+                        INACTIVE (TRANSACTIONAL ASSET PRICING)
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* MARKET SPECIFICATION REPORT */}
-              <div className="flex-1 flex flex-col gap-1.5 mt-2 border-t border-[#111111] pt-3 overflow-hidden min-h-0">
-                <div className="flex justify-between items-center mb-1 shrink-0">
-                  <span className="font-mono text-[10px] font-bold text-gray-500 uppercase">
-                    INJECTED LOT CONTRACT SPECIFICATIONS:
+              {/* BLOCK 3: SPREAD & TRADING LEDGERS */}
+              <div className="border border-[#111111] bg-white p-3 font-mono flex-1 flex flex-col min-h-0 min-h-[160px] overflow-hidden">
+                <div className="flex justify-between items-center border-b border-[#111111] pb-1.5 mb-2 shrink-0">
+                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">LOB BID / ASK SPREAD</span>
+                  <span className="text-[10px] font-bold text-[#111111] bg-gray-50 border border-[#111111] px-1 select-all">
+                    {spread}
                   </span>
-                  <button 
-                    onClick={() => setIsSpecsExpanded(true)}
-                    className="p-1 border border-gray-300 hover:bg-gray-100 bg-white text-[#111111] transition-all flex items-center justify-center shrink-0"
-                    title="Expand Specifications to Full View"
-                  >
-                    <Maximize2 className="h-3 w-3" />
-                  </button>
                 </div>
-                <div className="border border-gray-300 bg-white p-3 font-mono text-[10px] leading-relaxed text-gray-700 overflow-y-auto flex-1 select-text border-solid min-h-0">
+
+                <div className="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0 text-[9px]">
+                  {/* BIDS */}
+                  <div className="space-y-1">
+                    <span className="font-bold text-gray-400 text-[8px] uppercase tracking-wider block">BUYER BIDS (LIMITS)</span>
+                    {bids.map((b) => {
+                      const isHumanBid = b.name === "Buyer (You)";
+                      return (
+                        <div key={b.id} className={`border p-1.5 flex justify-between items-center leading-normal ${
+                          isHumanBid ? "border-amber-500 bg-amber-50/10 font-bold" : "border-blue-200 bg-blue-50/10"
+                        }`}>
+                          <div className="flex flex-col">
+                            <span className="font-bold">{b.name}</span>
+                            <span className="text-[7.5px] opacity-60">CAP: {b.hidden_floor_ceil} EUR</span>
+                          </div>
+                          <span className="font-bold border border-current px-1 bg-white">
+                            {b.current_price_point ? `${b.current_price_point} EUR` : "NO OFFER"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* ASKS */}
+                  <div className="space-y-1">
+                    <span className="font-bold text-gray-400 text-[8px] uppercase tracking-wider block">SELLER ASKS (RESERVATIONS)</span>
+                    {asks.map((s) => {
+                      const isHumanAsk = s.name === "Seller (You)";
+                      return (
+                        <div key={s.id} className={`border p-1.5 flex justify-between items-center leading-normal ${
+                          isHumanAsk ? "border-amber-500 bg-amber-50/10 font-bold" : "border-gray-200 bg-gray-50/10"
+                        }`}>
+                          <div className="flex flex-col">
+                            <span className="font-bold">{s.name}</span>
+                            <span className="text-[7.5px] opacity-60">FLOOR: {s.hidden_floor_ceil} EUR</span>
+                          </div>
+                          <span className="font-bold border border-current px-1 bg-white">
+                            {s.current_price_point ? `${s.current_price_point} EUR` : "NO OFFER"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* BLOCK 4: COMPACT SPECIFICATIONS PANEL */}
+              <div className="border border-[#111111] bg-white p-3 font-mono shrink-0 flex flex-col h-[28%] min-h-[140px] overflow-hidden">
+                <div className="flex justify-between items-center border-b border-[#111111] pb-1.5 mb-1.5 shrink-0">
+                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">LOT SPECIFICATIONS</span>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={handleDownloadPDF}
+                      className="p-1 border border-gray-300 hover:bg-gray-100 bg-white text-[#111111] transition-all flex items-center justify-center shrink-0 cursor-pointer"
+                      title="Download Contract as PDF"
+                    >
+                      <Download className="h-2.5 w-2.5" />
+                    </button>
+                    <button 
+                      onClick={() => setIsSpecsExpanded(true)}
+                      className="p-1 border border-gray-300 hover:bg-[#111111] hover:text-white bg-white text-[#111111] transition-all flex items-center justify-center shrink-0 cursor-pointer"
+                      title="Expand Specifications to Full View"
+                    >
+                      <Maximize2 className="h-2.5 w-2.5" />
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto font-mono text-[9px] leading-relaxed text-gray-700 select-text pr-1">
                   <div className="space-y-1">
                     {renderMarkdown(activeDeal.technical_specs)}
                   </div>
@@ -1365,14 +1917,22 @@ export default function Home() {
                 <Terminal className="h-4.5 w-4.5 text-white" />
                 <span>LOT: {activeDeal.item_name} — FULL CONTRACT SPECIFICATIONS</span>
               </div>
-              <button
-                onClick={() => setIsSpecsExpanded(false)}
-                className="border border-white px-3 py-1.5 bg-white text-[#111111] hover:bg-gray-100 transition-all flex items-center gap-1.5 text-[10px] font-bold"
-                title="Collapse to sidebar"
-              >
-                <Minimize2 className="h-3.5 w-3.5" />
-                <span>COLLAPSE VIEW [ESC]</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownloadPDF}
+                  className="border border-white p-2 bg-white text-[#111111] hover:bg-gray-100 transition-all flex items-center justify-center shrink-0 cursor-pointer"
+                  title="Download Contract as PDF"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => setIsSpecsExpanded(false)}
+                  className="border border-white p-2 bg-transparent text-white hover:bg-white/10 transition-all flex items-center justify-center shrink-0 cursor-pointer"
+                  title="Collapse to sidebar [ESC]"
+                >
+                  <Minimize2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
             
             {/* Modal Body */}
@@ -1404,11 +1964,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setIsIngestionFullView(false)}
-                className="border border-white px-3 py-1.5 bg-white text-[#111111] hover:bg-gray-100 transition-all flex items-center gap-1.5 text-[10px] font-bold cursor-pointer"
-                title="Collapse to sidebar"
+                className="border border-white p-2 bg-white text-[#111111] hover:bg-gray-100 transition-all flex items-center justify-center shrink-0 cursor-pointer"
+                title="Collapse to sidebar [ESC]"
               >
                 <Minimize2 className="h-3.5 w-3.5" />
-                <span>COLLAPSE VIEW [ESC]</span>
               </button>
             </div>
             
@@ -1570,3 +2129,22 @@ export default function Home() {
     </main>
   );
 }
+
+export default function Home() {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) {
+    return (
+      <div className="h-screen w-screen bg-[#fafafa] flex items-center justify-center font-mono text-xs uppercase text-[#111111]">
+        <span>Loading Atira Portal...</span>
+      </div>
+    );
+  }
+
+  return <HomeContent />;
+}
+
