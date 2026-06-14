@@ -96,6 +96,7 @@ graph TD
 * **Google GenAI SDK (`Gemini-2.5-Flash`)**: Powers task-specific unstructured text extraction, B2B bilateral bargaining, and cognitive strategic logic under strict Pydantic schemas.
 * **Fal.ai client SDK (`fal-ai/bagel/understand` / `any-llm`)**: Advanced Multimodal Visual Language Models (VLM) which analyze uploaded component schematics or spec sheets to extract technical parameters and budget thresholds.
 * **Tavily Search API**: Live index grounding providing market should-cost metrics and replacement cost indices.
+* **Pioneer**: Used for live telemetry for future improvement of document ingestion and agent negotiation.
 
 ### **Frontend & Visual Architecture**
 * **Next.js 15 & React 19**: Modernized React framework compiling fully optimized static bundles with hydration mismatch guards.
