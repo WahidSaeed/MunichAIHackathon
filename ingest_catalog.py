@@ -787,13 +787,18 @@ def download_image(url: str, save_path: str) -> bool:
     Downloads an image from a URL and saves it locally.
     """
     try:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        base_dir = "frontend/public/inventory"
+        base_real = os.path.realpath(base_dir)
+        target_real = os.path.realpath(save_path)
+        if os.path.commonpath([base_real, target_real]) != base_real:
+            raise Exception("Invalid file path")
+        os.makedirs(os.path.dirname(target_real), exist_ok=True)
         req = urllib.request.Request(
             url,
             headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'}
         )
         with urllib.request.urlopen(req) as response:
-            with open(save_path, 'wb') as f:
+            with open(target_real, 'wb') as f:
                 f.write(response.read())
         return True
     except Exception as e:
