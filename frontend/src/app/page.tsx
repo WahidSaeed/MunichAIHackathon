@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { 
   Database, 
   Terminal, 
@@ -20,8 +21,16 @@ import {
   ShoppingBag,
   Tag,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  Upload,
+  FileText,
+  FileSpreadsheet,
+  FileImage,
+  Paperclip
 } from "lucide-react";
+
 
 const parseInlineMarkdown = (text: string) => {
   let parts: React.ReactNode[] = [text];
@@ -141,6 +150,92 @@ interface Deal {
   messages: Message[];
 }
 
+const renderFormattedText = (text: string) => {
+  if (!text) return null;
+
+  let parts: React.ReactNode[] = [text];
+
+  // 1. Parse highlight: ==highlight==
+  parts = parts.flatMap((part) => {
+    if (typeof part !== "string") return part;
+    const pieces = part.split(/==([^=]+)==/g);
+    return pieces.map((piece, i) =>
+      i % 2 === 1 ? (
+        <mark
+          key={i}
+          className="bg-yellow-200 text-black px-1 font-bold border-b border-yellow-500 rounded-none inline-block leading-none"
+        >
+          {piece}
+        </mark>
+      ) : (
+        piece
+      )
+    );
+  });
+
+  // 2. Parse bold: **bold**
+  parts = parts.flatMap((part) => {
+    if (typeof part !== "string") return part;
+    const pieces = part.split(/\*\*([^*]+)\*\*/g);
+    return pieces.map((piece, i) =>
+      i % 2 === 1 ? (
+        <strong key={i} className="font-bold text-[#111111]">
+          {piece}
+        </strong>
+      ) : (
+        piece
+      )
+    );
+  });
+
+  // 3. Parse strikethrough: ~~strikethrough~~
+  parts = parts.flatMap((part) => {
+    if (typeof part !== "string") return part;
+    const pieces = part.split(/~~([^~]+)~~/g);
+    return pieces.map((piece, i) =>
+      i % 2 === 1 ? (
+        <span key={i} className="line-through opacity-60">
+          {piece}
+        </span>
+      ) : (
+        piece
+      )
+    );
+  });
+
+  // 4. Parse double underscore: __underline__
+  parts = parts.flatMap((part) => {
+    if (typeof part !== "string") return part;
+    const pieces = part.split(/__([^_]+)__/g);
+    return pieces.map((piece, i) =>
+      i % 2 === 1 ? (
+        <span key={i} className="underline decoration-[#111111] underline-offset-2 font-semibold">
+          {piece}
+        </span>
+      ) : (
+        piece
+      )
+    );
+  });
+
+  // 5. Parse single underscore: _underline_
+  parts = parts.flatMap((part) => {
+    if (typeof part !== "string") return part;
+    const pieces = part.split(/_([^_]+)_/g);
+    return pieces.map((piece, i) =>
+      i % 2 === 1 ? (
+        <span key={i} className="underline decoration-[#111111] underline-offset-2">
+          {piece}
+        </span>
+      ) : (
+        piece
+      )
+    );
+  });
+
+  return <>{parts}</>;
+};
+
 export default function Home() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
@@ -153,9 +248,33 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [showLotForm, setShowLotForm] = useState(false);
   const [activeDrawer, setActiveDrawer] = useState<"BUYER" | "SELLER" | null>("BUYER");
+  const [rfqText, setRfqText] = useState("");
+  const [ingesting, setIngesting] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [parseStep, setParseStep] = useState("");
+  const [isIngestionExpanded, setIsIngestionExpanded] = useState(true);
+  const [isIngestionFullView, setIsIngestionFullView] = useState(false);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
   const prevActiveDealIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef<number>(0);
+
+  // Real-time telemetry monitoring states
+  const [pioneerStream, setPioneerStream] = useState<any[]>([]);
+  const [isSpecsExpanded, setIsSpecsExpanded] = useState(false);
+
+  // Close overlay modals on ESC key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsSpecsExpanded(false);
+        setIsIngestionFullView(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const activeDeal = deals.find(d => d.id === activeDealId) || null;
 
@@ -178,10 +297,29 @@ export default function Home() {
     }
   };
 
+  // Fetch pioneer telemetry stream
+  const fetchPioneerStream = async () => {
+    try {
+      const res = await fetch("http://localhost:8080/api/observability/pioneer-stream");
+      if (res.ok) {
+        const data = await res.json();
+        setPioneerStream(data);
+      }
+    } catch (err) {
+      console.error("Error fetching pioneer stream:", err);
+    }
+  };
+
+
+
   useEffect(() => {
     fetchDeals();
+    fetchPioneerStream();
     // Auto refresh every 5 seconds to sync state if needed
-    const interval = setInterval(() => fetchDeals(), 5000);
+    const interval = setInterval(() => {
+      fetchDeals();
+      fetchPioneerStream();
+    }, 5000);
     return () => clearInterval(interval);
   }, [activeDealId]);
 
@@ -233,6 +371,142 @@ export default function Home() {
       setSubmitting(false);
     }
   };
+
+  // Ingest unstructured RFQ Raw Text
+  const handleIngestRFQ = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rfqText.trim() || ingesting) return;
+    setIngesting(true);
+    
+    // Simulate real-time progress steps for beautiful console indicators
+    setParseStep("SCANNING");
+    await new Promise(r => setTimeout(r, 800));
+    
+    setParseStep("EXTRACTING");
+    await new Promise(r => setTimeout(r, 1000));
+    
+    setParseStep("RESEARCH");
+    await new Promise(r => setTimeout(r, 1000));
+    
+    setParseStep("SEEDING");
+    
+    try {
+      const res = await fetch("http://localhost:8080/api/deals/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          raw_text: rfqText
+        })
+      });
+      if (!res.ok) throw new Error("Backend connection offline.");
+      const data = await res.json();
+      if (data.status === "SUCCESS") {
+        setRfqText("");
+        setParseStep("");
+        await fetchDeals();
+        setActiveDealId(data.deal_id);
+        setActiveDrawer("BUYER");
+        setIsIngestionFullView(false);
+      } else {
+        alert("Ingestion failed: " + (data.detail || "Unknown error"));
+        setParseStep("");
+      }
+    } catch (err) {
+      console.error("Error during unstructured RFQ ingestion:", err);
+      alert("Error occurred during RFQ ingestion. Please check if the backend is running.");
+      setParseStep("");
+    } finally {
+      setIngesting(false);
+    }
+  };
+
+  // Drag and drop event handlers
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      setSelectedFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  // Ingest Document / Image File RFQ
+  const handleIngestFile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFile || ingesting) return;
+    setIngesting(true);
+    
+    // Simulate real-time progress steps for beautiful console indicators
+    setParseStep("SCANNING");
+    await new Promise(r => setTimeout(r, 1000));
+    
+    setParseStep("EXTRACTING");
+    await new Promise(r => setTimeout(r, 1200));
+    
+    setParseStep("RESEARCH");
+    await new Promise(r => setTimeout(r, 1200));
+    
+    setParseStep("SEEDING");
+    
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      
+      const res = await fetch("http://localhost:8080/api/deals/ingest-file", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!res.ok) throw new Error("Failed to parse file or register deal.");
+      
+      const data = await res.json();
+      if (data.status === "SUCCESS") {
+        setSelectedFile(null);
+        setParseStep("");
+        await fetchDeals();
+        setActiveDealId(data.deal_id);
+        setActiveDrawer("BUYER");
+        setIsIngestionFullView(false);
+      } else {
+        alert("Ingestion failed: " + (data.detail || "Unknown error"));
+        setParseStep("");
+      }
+    } catch (err: any) {
+      console.error("Error during file ingestion:", err);
+      alert("Error occurred during file ingestion: " + err.message);
+      setParseStep("");
+    } finally {
+      setIngesting(false);
+    }
+  };
+
+
+  // Unified submission handler for text and file ingestion
+  const handleSubmitCombined = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedFile) {
+      await handleIngestFile(e);
+    } else {
+      await handleIngestRFQ(e);
+    }
+  };
+
 
   // Step the multi-agent negotiation loop
   const handleStepExchange = async () => {
@@ -355,7 +629,30 @@ export default function Home() {
   };
 
   return (
-    <main className="h-screen w-screen flex flex-col font-sans select-none antialiased bg-[#fafafa]">
+    <main 
+      onDragEnter={handleDrag}
+      onDragOver={handleDrag}
+      onDragLeave={handleDrag}
+      onDrop={handleDrop}
+      className="h-screen w-screen flex flex-col font-sans select-none antialiased bg-[#fafafa] relative"
+    >
+      {dragActive && (
+        <div
+          onDragEnter={handleDrag}
+          onDragOver={handleDrag}
+          onDragLeave={handleDrag}
+          onDrop={handleDrop}
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 border-4 border-dashed border-emerald-500 font-mono p-4 text-center select-none"
+        >
+          <Upload className="h-12 w-12 text-emerald-500 animate-bounce mb-4" />
+          <h2 className="text-emerald-500 text-xl font-bold uppercase tracking-wider mb-2">
+            DROP RFQ FILE TO INGEST
+          </h2>
+          <p className="text-gray-400 text-xs uppercase max-w-md">
+            Supported formats: DOCX, PDF, XLSX, TXT, PNG, JPG, WEBP, GIF
+          </p>
+        </div>
+      )}
       
       {/* GLOBAL HIGH-CONTRAST HEADER */}
       <header className="h-14 border-b border-[#111111] bg-white flex items-center justify-between px-4 z-10 shrink-0">
@@ -402,50 +699,144 @@ export default function Home() {
           {/* HISTORICAL SESSIONS LIST INDEX */}
           <div className="flex-1 flex flex-col p-2 space-y-2 bg-[#fafafa] min-h-0">
             
-            {showLotForm && (
-              <form onSubmit={handleCreateLot} className="border border-[#111111] p-3 bg-white space-y-3 shrink-0">
-                <div className="font-mono text-[11px] font-bold border-b border-[#111111] pb-1 uppercase flex justify-between items-center">
-                  <span>INITIALIZE {newPerspective} LOT</span>
-                  <button type="button" onClick={() => setShowLotForm(false)} className="hover:opacity-70">
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-                <div>
-                  <label className="font-mono text-[9px] font-bold text-gray-500 block mb-1 uppercase">
-                    ASSET LOT DESCRIPTOR / ITEM NAME
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="E.G. TITANIUM ROTOR ASSEMBLY"
-                    value={newLotName}
-                    onChange={(e) => setNewLotName(e.target.value)}
-                    className="w-full border border-[#111111] bg-white px-2 py-1.5 font-mono text-xs focus:outline-none focus:bg-[#fafafa]"
-                  />
-                </div>
-                <div>
-                  <label className="font-mono text-[9px] font-bold text-gray-500 block mb-1 uppercase">
-                    TARGET POOL BUDGET (EUR)
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min={500}
-                    max={5000}
-                    value={newBudget}
-                    onChange={(e) => setNewBudget(parseInt(e.target.value))}
-                    className="w-full border border-[#111111] bg-white px-2 py-1.5 font-mono text-xs focus:outline-none"
-                  />
+            {/* MULTIMODAL INGESTION TERMINAL BOX */}
+            <div className="border border-[#111111] bg-white flex flex-col shrink-0">
+              <div className="w-full bg-[#111111] text-white px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider flex items-center justify-between text-left">
+                <div className="flex items-center gap-1.5 flex-1 text-left">
+                  <Terminal className="h-3 w-3 text-white animate-pulse shrink-0" />
+                  <span>INGESTION TERMINAL</span>
                 </div>
                 <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full bg-[#111111] text-white font-mono text-xs font-bold uppercase py-2 hover:bg-gray-800 disabled:opacity-50"
+                  type="button"
+                  onClick={() => setIsIngestionFullView(true)}
+                  className="p-1 hover:bg-gray-800 border border-gray-700 hover:border-gray-500 bg-transparent text-white transition-all flex items-center justify-center shrink-0 ml-1.5 cursor-pointer"
+                  title="Expand Ingestion Terminal to Full View"
                 >
-                  {submitting ? "RUNNING TAVILY RESEARCH..." : "SPAWN ESCROW ROOM"}
+                  <Maximize2 className="h-2.5 w-2.5 text-white" />
                 </button>
-              </form>
-            )}
+              </div>
+
+              {ingesting ? (
+                    /* PROGRESS SCANNER MODULE */
+                    <div className="p-3 bg-black text-[#00ff00] font-mono text-[9px] leading-relaxed space-y-1.5 border-t border-[#111111]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="animate-ping h-1.5 w-1.5 bg-[#00ff00] rounded-none"></span>
+                        <span>INGESTION PROTOCOL INITIATED...</span>
+                      </div>
+                      
+                      {/* Step 1: SCANNING */}
+                      <div className="flex items-center justify-between">
+                        <span className={parseStep === "SCANNING" ? "animate-pulse font-bold" : ""}>
+                          {parseStep === "SCANNING" ? "[◷]" : ["EXTRACTING", "RESEARCH", "SEEDING"].includes(parseStep) || parseStep === "" ? "[✔]" : "[ ]"} STAGE 1: SCANNING FILE
+                        </span>
+                        {parseStep === "SCANNING" && <span className="text-[8px] animate-pulse">PROCESSING...</span>}
+                      </div>
+
+                      {/* Step 2: EXTRACTING */}
+                      <div className="flex items-center justify-between">
+                        <span className={parseStep === "EXTRACTING" ? "animate-pulse font-bold" : ""}>
+                          {parseStep === "EXTRACTING" ? "[◷]" : ["RESEARCH", "SEEDING"].includes(parseStep) || parseStep === "" ? "[✔]" : "[ ]"} STAGE 2: FIELDS EXTRACTION
+                        </span>
+                        {parseStep === "EXTRACTING" && <span className="text-[8px] animate-pulse">PROCESSING...</span>}
+                      </div>
+
+                      {/* Step 3: RESEARCH */}
+                      <div className="flex items-center justify-between">
+                        <span className={parseStep === "RESEARCH" ? "animate-pulse font-bold" : ""}>
+                          {parseStep === "RESEARCH" ? "[◷]" : ["SEEDING"].includes(parseStep) || parseStep === "" ? "[✔]" : "[ ]"} STAGE 3: TAVILY MARKET GROUNDING
+                        </span>
+                        {parseStep === "RESEARCH" && <span className="text-[8px] animate-pulse">PROCESSING...</span>}
+                      </div>
+
+                      {/* Step 4: SEEDING */}
+                      <div className="flex items-center justify-between">
+                        <span className={parseStep === "SEEDING" ? "animate-pulse font-bold" : ""}>
+                          {parseStep === "SEEDING" ? "[◷]" : parseStep === "" ? "[✔]" : "[ ]"} STAGE 4: PG SEEDING & PIONEER TRACE
+                        </span>
+                        {parseStep === "SEEDING" && <span className="text-[8px] animate-pulse">COMMIT...</span>}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                    <form onSubmit={handleSubmitCombined} className="p-2 flex flex-col bg-white space-y-2">
+                      <div className="relative">
+                        <textarea
+                          rows={3}
+                          value={rfqText}
+                          onChange={(e) => setRfqText(e.target.value)}
+                          placeholder="PASTE MESSY RFQ EMAIL, DRAG & DROP FILE, OR ATTACH..."
+                          className="w-full border border-[#111111] bg-white p-2 pr-8 font-mono text-[9px] text-[#111111] focus:outline-none placeholder-gray-400 leading-normal resize-none focus:bg-[#fafafa]"
+                          disabled={ingesting}
+                          style={{ minHeight: "55px" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById("rfq-file-input")?.click()}
+                          className="absolute bottom-2 right-2 p-1 hover:bg-gray-100 text-gray-500 hover:text-[#111111] transition-all m-0"
+                          title="Attach RFQ document or image"
+                          disabled={ingesting}
+                        >
+                          <Paperclip className="h-3.5 w-3.5" />
+                        </button>
+                        <input
+                          type="file"
+                          id="rfq-file-input"
+                          className="hidden"
+                          onChange={handleFileChange}
+                          accept=".docx,.pdf,.xlsx,.xls,.txt,.png,.jpg,.jpeg,.webp,.gif"
+                          disabled={ingesting}
+                        />
+                      </div>
+
+                      {selectedFile && (
+                        /* FILE PREVIEW CONTAINER */
+                        <div className="border border-[#111111] p-2 bg-[#fafafa] flex flex-col gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-1.5 bg-white border border-[#111111] flex items-center justify-center shrink-0">
+                              {(() => {
+                                const ext = selectedFile.name.split(".").pop()?.toLowerCase();
+                                if (["png", "jpg", "jpeg", "webp", "gif"].includes(ext || "")) {
+                                  return <FileImage className="h-5 w-5 text-[#111111]" />;
+                                }
+                                if (["xlsx", "xls"].includes(ext || "")) {
+                                  return <FileSpreadsheet className="h-5 w-5 text-[#111111]" />;
+                                }
+                                return <FileText className="h-5 w-5 text-[#111111]" />;
+                              })()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-mono text-[9px] font-bold text-[#111111] truncate uppercase">
+                                {selectedFile.name}
+                              </div>
+                              <div className="font-mono text-[7px] text-gray-400 uppercase mt-0.5">
+                                {(selectedFile.size / 1024).toFixed(1)} KB
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedFile(null)}
+                              className="p-1 hover:bg-gray-200 border border-[#111111] bg-white transition-all text-[#111111]"
+                              title="Remove selected file"
+                              disabled={ingesting}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={ingesting || (!selectedFile && !rfqText.trim())}
+                        className="w-full bg-[#111111] text-white font-mono text-[9px] font-bold uppercase py-1.5 hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-1.5 border border-[#111111] transition-all duration-100"
+                      >
+                        <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                        <span>{selectedFile ? "INGEST ATTACHED FILE" : "INGEST & SEED POSTGRES"}</span>
+                      </button>
+                    </form>
+                    </>
+                  )}
+            </div>
 
             {loading ? (
               <div className="p-4 text-center font-mono text-xs text-gray-400 shrink-0">
@@ -454,102 +845,117 @@ export default function Home() {
             ) : (
               <div className="flex-1 flex flex-col min-h-0 border border-[#111111] bg-white">
                 
-                {/* BUYER DRAWER */}
-                <div className={`flex flex-col min-h-0 ${activeDrawer === "BUYER" ? "flex-1" : ""}`}>
+                {/* SIDEBAR NAVIGATION MENU */}
+                <div className="flex border-b border-[#111111] shrink-0">
                   <button
                     type="button"
-                    onClick={() => setActiveDrawer(activeDrawer === "BUYER" ? null : "BUYER")}
-                    className={`w-full flex justify-between items-center px-3 py-2.5 font-mono text-[10px] font-bold uppercase tracking-wider transition-all duration-100 border-b border-[#111111] text-left ${
+                    onClick={() => setActiveDrawer("BUYER")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-center transition-all duration-100 cursor-pointer border-r border-[#111111] ${
                       activeDrawer === "BUYER"
                         ? "bg-[#111111] text-white"
-                        : "bg-[#fafafa] text-gray-500 hover:text-[#111111]"
+                        : "bg-[#fafafa] text-gray-500 hover:bg-[#fafafa] hover:text-[#111111]"
                     }`}
                   >
-                    <span className="flex items-center gap-2">
-                      <span className={activeDrawer === "BUYER" ? "text-white" : "text-gray-400"}>
-                        {activeDrawer === "BUYER" ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                      </span>
-                      <ShoppingBag className={`h-3.5 w-3.5 shrink-0 ${activeDrawer === "BUYER" ? "text-white" : "text-gray-500"}`} />
-                      <span>BUYER CHANNELS (WE BUY)</span>
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className={activeDrawer === "BUYER" ? "text-gray-300" : "text-gray-400"}>({buyerDeals.length})</span>
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNewPerspective("BUYER");
-                          setShowLotForm(true);
-                        }}
-                        className={`font-mono text-[11px] font-bold px-1 hover:opacity-80 cursor-pointer ${
-                          activeDrawer === "BUYER" ? "text-white" : "text-[#111111]"
-                        }`}
-                        title="Add Buyer Channel"
-                      >
-                        [+]
-                      </span>
-                    </div>
+                    <ShoppingBag className="h-3 w-3" />
+                    <span>BUYER ({buyerDeals.length})</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveDrawer("SELLER")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-center transition-all duration-100 cursor-pointer ${
+                      activeDrawer === "SELLER"
+                        ? "bg-[#111111] text-white"
+                        : "bg-[#fafafa] text-gray-500 hover:bg-[#fafafa] hover:text-[#111111]"
+                    }`}
+                  >
+                    <Tag className="h-3 w-3" />
+                    <span>SELLER ({sellerDeals.length})</span>
+                  </button>
+                </div>
 
-                  {activeDrawer === "BUYER" && (
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1.5 bg-[#fafafa]">
-                      {buyerDeals.length === 0 ? (
+                <div className="flex-1 flex flex-col min-h-0">
+                  {/* Action/Sub-header Bar */}
+                  <div className="w-full flex justify-between items-center px-3 py-1.5 bg-[#fafafa] border-b border-[#111111] text-[#111111] font-mono text-[8px] font-bold uppercase tracking-wider">
+                    <span className="text-gray-500 font-mono text-[8px]">
+                      {activeDrawer === "BUYER" ? "ACTIVE BUY CHANNELS" : "ACTIVE SELL CHANNELS"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewPerspective(activeDrawer === "BUYER" ? "BUYER" : "SELLER");
+                        setShowLotForm(true);
+                      }}
+                      className="font-mono text-[8px] font-bold hover:underline cursor-pointer text-[#111111] uppercase"
+                    >
+                      [+] Create Channel
+                    </button>
+                  </div>
+
+                  {/* Scrollable list */}
+                  <div className="flex-1 overflow-y-auto p-2 space-y-1.5 bg-[#fafafa]">
+                    {showLotForm && newPerspective === activeDrawer && (
+                      <form onSubmit={handleCreateLot} className="border border-[#111111] p-3 bg-white space-y-3 shrink-0 mb-2 animate-fade-in">
+                        <div className="font-mono text-[10px] font-bold border-b border-[#111111] pb-1 uppercase flex justify-between items-center">
+                          <span>INITIALIZE {newPerspective} LOT</span>
+                          <button type="button" onClick={() => setShowLotForm(false)} className="hover:opacity-70">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <div>
+                          <label className="font-mono text-[8px] font-bold text-gray-500 block mb-1 uppercase">
+                            ASSET LOT DESCRIPTOR / ITEM NAME
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="E.G. TITANIUM ROTOR ASSEMBLY"
+                            value={newLotName}
+                            onChange={(e) => setNewLotName(e.target.value)}
+                            className="w-full border border-[#111111] bg-white px-2 py-1.5 font-mono text-[10px] focus:outline-none focus:bg-[#fafafa]"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-mono text-[8px] font-bold text-gray-500 block mb-1 uppercase">
+                            TARGET POOL BUDGET (EUR)
+                          </label>
+                          <input
+                            type="number"
+                            required
+                            min={500}
+                            max={5000}
+                            value={newBudget}
+                            onChange={(e) => setNewBudget(parseInt(e.target.value))}
+                            className="w-full border border-[#111111] bg-white px-2 py-1.5 font-mono text-[10px] focus:outline-none focus:bg-[#fafafa]"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={submitting}
+                          className="w-full bg-[#111111] text-white font-mono text-[9px] font-bold uppercase py-1.5 hover:bg-gray-800 disabled:opacity-50"
+                        >
+                          {submitting ? "RUNNING TAVILY RESEARCH..." : "SPAWN ESCROW ROOM"}
+                        </button>
+                      </form>
+                    )}
+
+                    {activeDrawer === "BUYER" ? (
+                      buyerDeals.length === 0 ? (
                         <div className="p-4 text-center font-mono text-[9px] text-gray-400 italic">
                           NO ACTIVE BUYER CHANNELS
                         </div>
                       ) : (
                         buyerDeals.map((d) => renderDealChannel(d))
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* SELLER DRAWER */}
-                <div className={`flex flex-col min-h-0 border-t border-[#111111] ${activeDrawer === "SELLER" ? "flex-1" : ""}`}>
-                  <button
-                    type="button"
-                    onClick={() => setActiveDrawer(activeDrawer === "SELLER" ? null : "SELLER")}
-                    className={`w-full flex justify-between items-center px-3 py-2.5 font-mono text-[10px] font-bold uppercase tracking-wider transition-all duration-100 text-left ${
-                      activeDrawer === "SELLER"
-                        ? "bg-[#111111] text-white"
-                        : "bg-[#fafafa] text-gray-500 hover:text-[#111111]"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span className={activeDrawer === "SELLER" ? "text-white" : "text-gray-400"}>
-                        {activeDrawer === "SELLER" ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                      </span>
-                      <Tag className={`h-3.5 w-3.5 shrink-0 ${activeDrawer === "SELLER" ? "text-white" : "text-gray-500"}`} />
-                      <span>SELLER CHANNELS (WE SELL)</span>
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className={activeDrawer === "SELLER" ? "text-gray-300" : "text-gray-400"}>({sellerDeals.length})</span>
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNewPerspective("SELLER");
-                          setShowLotForm(true);
-                        }}
-                        className={`font-mono text-[11px] font-bold px-1 hover:opacity-80 cursor-pointer ${
-                          activeDrawer === "SELLER" ? "text-white" : "text-[#111111]"
-                        }`}
-                        title="Add Seller Channel"
-                      >
-                        [+]
-                      </span>
-                    </div>
-                  </button>
-
-                  {activeDrawer === "SELLER" && (
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1.5 bg-[#fafafa] border-t border-[#111111]">
-                      {sellerDeals.length === 0 ? (
+                      )
+                    ) : (
+                      sellerDeals.length === 0 ? (
                         <div className="p-4 text-center font-mono text-[9px] text-gray-400 italic">
                           NO ACTIVE SELLER CHANNELS
                         </div>
                       ) : (
                         sellerDeals.map((d) => renderDealChannel(d))
-                      )}
-                    </div>
-                  )}
+                      )
+                    )}
+                  </div>
                 </div>
 
               </div>
@@ -587,200 +993,218 @@ export default function Home() {
           
           {/* ACTIVE LOT CONTEXT BAR */}
           <div className="h-11 border-b border-[#111111] bg-white px-4 flex items-center justify-between shrink-0">
-            {activeDeal ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <Terminal className="h-4 w-4 text-[#111111]" />
-                  <span className="font-mono text-xs font-bold uppercase tracking-wider text-[#111111]">
+            <div className="flex items-center gap-2 min-w-0">
+              {activeDeal ? (
+                <div className="flex items-center gap-2 min-w-0">
+                  <Terminal className="h-4 w-4 text-[#111111] shrink-0" />
+                  <span className="font-mono text-xs font-bold uppercase tracking-wider text-[#111111] truncate">
                     EXCHANGE FEED | LOT: {activeDeal.item_name}
                   </span>
-                  <span className="font-mono text-[9px] font-bold px-2 py-0.5 border border-amber-500 bg-amber-100 text-amber-900">
-                    ROLE: {activeDeal.perspective === "BUYER" ? "BUYER (WE BUY)" : "SELLER (WE SELL)"}
+                  <span className="font-mono text-[9px] font-bold px-2 py-0.5 border border-amber-500 bg-amber-100 text-amber-900 shrink-0">
+                    ROLE: {activeDeal.perspective === "BUYER" ? "BUYER" : "SELLER"}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[9px] font-bold uppercase text-gray-500">
-                    DEAL ID:
-                  </span>
-                  <span className="font-mono text-[9px] font-bold text-gray-700 select-all">
-                    {activeDeal.id.slice(0, 8).toUpperCase()}...
-                  </span>
+              ) : (
+                <span className="font-mono text-xs font-bold text-gray-400 uppercase truncate">
+                  NO ACTIVE LOT ELECTED. INITIALIZE OR CHOOSE FROM PANEL.
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-4 shrink-0">
+              {activeDeal && (
+                <div className="hidden md:flex items-center gap-1.5 font-mono text-[9px] text-gray-500 font-bold uppercase">
+                  <span>DEAL ID:</span>
+                  <span className="text-gray-700 select-all">{activeDeal.id.slice(0, 8).toUpperCase()}...</span>
                 </div>
-              </>
-            ) : (
-              <span className="font-mono text-xs font-bold text-gray-400 uppercase">
-                NO ACTIVE LOT ELECTED. INITIALIZE OR CHOOSE FROM PANEL.
-              </span>
-            )}
+              )}
+              
+              <Link
+                href="/observability"
+                className="font-mono text-[10px] font-bold uppercase border border-[#111111] px-2.5 py-1 bg-[#111111] text-white hover:bg-white hover:text-[#111111] flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(17,17,17,1)] hover:shadow-[2px_2px_0px_rgba(17,17,17,0.1)] transition-all relative animate-fade-in"
+                title="System Observability Dashboard"
+              >
+                <Sliders className="h-3.5 w-3.5" />
+                <span>Observability</span>
+                {pioneerStream.some(item => item.status === "DEADLOCK") && (
+                  <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  </span>
+                )}
+              </Link>
+            </div>
           </div>
 
-          {/* CHAT MESSAGES SCROLL VIEW */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
-            {activeDeal ? (
-              activeDeal.messages.map((m) => {
-                const isBuyer = m.role === "BUYER";
-                const isSeller = m.role === "SELLER";
-                const isOperator = m.role === "OPERATOR";
-                const isSystem = m.role === "SYSTEM";
-                const isHuman = m.sender_name === "Buyer (You)" || m.sender_name === "Seller (You)";
+          <>
+              {/* CHAT MESSAGES SCROLL VIEW */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+                {activeDeal ? (
+                  activeDeal.messages.map((m) => {
+                    const isBuyer = m.role === "BUYER";
+                    const isSeller = m.role === "SELLER";
+                    const isOperator = m.role === "OPERATOR";
+                    const isSystem = m.role === "SYSTEM";
+                    const isHuman = m.sender_name === "Buyer (You)" || m.sender_name === "Seller (You)";
 
-                // Format avatar token initials
-                let avatarText = "BY";
-                if (m.sender_name === "Buyer Agent" || m.sender_name === "Buyer" || m.sender_name === "Buyer (You)") avatarText = "BY";
-                else if (m.sender_name === "Seller Agent" || m.sender_name === "Seller" || m.sender_name === "Seller (You)") avatarText = "SL";
-                else if (m.sender_name.startsWith("Operator")) avatarText = "OP";
-                else if (m.sender_name.startsWith("System")) avatarText = "SYS";
+                    // Format avatar token initials
+                    let avatarText = "BY";
+                    if (m.sender_name === "Buyer Agent" || m.sender_name === "Buyer" || m.sender_name === "Buyer (You)") avatarText = "BY";
+                    else if (m.sender_name === "Seller Agent" || m.sender_name === "Seller" || m.sender_name === "Seller (You)") avatarText = "SL";
+                    else if (m.sender_name.startsWith("Operator")) avatarText = "OP";
+                    else if (m.sender_name.startsWith("System")) avatarText = "SYS";
 
-                return (
-                  <div key={m.id} className="flex gap-3 items-start animate-fade-in">
+                    return (
+                      <div key={m.id} className="flex gap-3 items-start animate-fade-in">
+                        
+                        {/* AVATAR TOKEN */}
+                        <div className={`h-8 w-8 shrink-0 flex items-center justify-center font-mono text-[10px] font-bold border shrink-0 ${
+                          isSystem 
+                            ? "bg-[#111111] text-white border-[#111111]"
+                            : isOperator
+                            ? "bg-emerald-100 text-emerald-800 border-emerald-500"
+                            : isHuman
+                            ? "bg-amber-100 text-amber-900 border-amber-500 font-bold"
+                            : isBuyer
+                            ? "bg-blue-100 text-blue-800 border-blue-300"
+                            : "bg-white text-gray-800 border-gray-400"
+                        }`}>
+                          [{avatarText}]
+                        </div>
+
+                        {/* MESSAGE BUBBLE */}
+                        <div className={`flex-1 border p-3 ${
+                          isSystem
+                            ? "bg-slate-950 border-slate-950 text-white font-mono text-xs leading-relaxed"
+                            : isOperator
+                            ? "bg-emerald-50/30 border-emerald-400/60 text-gray-800"
+                            : isHuman
+                            ? "bg-amber-50/20 border-amber-400/50 text-amber-950"
+                            : isBuyer
+                            ? "bg-blue-50/40 border-blue-200/60 text-gray-800"
+                            : "bg-white border-gray-300 text-gray-800"
+                        }`}>
+                          {/* HEADER */}
+                          <div className="flex justify-between items-center mb-1 border-b border-dashed border-current pb-1 opacity-80">
+                            <span className="font-mono text-[10px] font-bold uppercase tracking-wider">
+                              {m.sender_name} | {m.role}
+                            </span>
+                            <span className="font-mono text-[8px] opacity-60">
+                              {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </span>
+                          </div>
+                          
+                          {/* BODY CONTENT */}
+                          <p className="text-xs font-mono leading-relaxed whitespace-pre-wrap">
+                            {renderFormattedText(m.message_text)}
+                          </p>
+                        </div>
+
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="h-full w-full flex flex-col items-center justify-center text-center p-8 border border-dashed border-gray-300">
+                    <Database className="h-8 w-8 text-gray-300 mb-2" />
+                    <h3 className="font-mono text-sm font-bold uppercase text-gray-400 mb-1">
+                      NO SESSION ELECTED
+                    </h3>
+                    <p className="font-mono text-[10px] text-gray-400 max-w-[280px]">
+                      CHOOSE AN ACTIVE TRADING POOL IN THE HISTORY INDEX OR GENERATE A NEW BULK ASSET LOT TO TRIGGER AUTOMATED NEGOTIATING AGENTS.
+                    </p>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* BOTTOM TERMINAL OVERRIDE & STEP BAR */}
+              <div className="border-t border-[#111111] bg-white p-3 shrink-0">
+                {activeDeal ? (
+                  <div className="flex flex-col gap-2">
                     
-                    {/* AVATAR TOKEN */}
-                    <div className={`h-8 w-8 shrink-0 flex items-center justify-center font-mono text-[10px] font-bold border shrink-0 ${
-                      isSystem 
-                        ? "bg-[#111111] text-white border-[#111111]"
-                        : isOperator
-                        ? "bg-emerald-100 text-emerald-800 border-emerald-500"
-                        : isHuman
-                        ? "bg-amber-100 text-amber-900 border-amber-500 font-bold"
-                        : isBuyer
-                        ? "bg-blue-100 text-blue-800 border-blue-300"
-                        : "bg-white text-gray-800 border-gray-400"
-                    }`}>
-                      [{avatarText}]
-                    </div>
-
-                    {/* MESSAGE BUBBLE */}
-                    <div className={`flex-1 border p-3 ${
-                      isSystem
-                        ? "bg-slate-950 border-slate-950 text-white font-mono text-xs leading-relaxed"
-                        : isOperator
-                        ? "bg-emerald-50/30 border-emerald-400/60 text-gray-800"
-                        : isHuman
-                        ? "bg-amber-50/20 border-amber-400/50 text-amber-950"
-                        : isBuyer
-                        ? "bg-blue-50/40 border-blue-200/60 text-gray-800"
-                        : "bg-white border-gray-300 text-gray-800"
-                    }`}>
-                      {/* HEADER */}
-                      <div className="flex justify-between items-center mb-1 border-b border-dashed border-current pb-1 opacity-80">
-                        <span className="font-mono text-[10px] font-bold uppercase tracking-wider">
-                          {m.sender_name} | {m.role}
+                    {/* INSTRUCTION TIPS SUB-BAR */}
+                    <div className="flex justify-between items-center px-1">
+                      <div className="flex gap-2">
+                        <span className="font-mono text-[9px] font-bold uppercase text-gray-500">
+                          OPERATOR CLI CHEATSHEETS:
                         </span>
-                        <span className="font-mono text-[8px] opacity-60">
-                          {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        <span className="font-mono text-[9px] text-gray-600 bg-gray-100 px-1 font-bold">
+                          "approve" (BUMPS BUYER CAP +100)
+                        </span>
+                        <span className="font-mono text-[9px] text-gray-600 bg-gray-100 px-1 font-bold">
+                          "terminate" (FORCE HALT DEAL)
                         </span>
                       </div>
+                      <span className="font-mono text-[9px] font-bold text-gray-500 uppercase">
+                        STATUS: {activeDeal.status}
+                      </span>
+                    </div>
+
+                    <div className="flex gap-2 items-stretch">
                       
-                      {/* BODY CONTENT */}
-                      <p className="text-xs font-mono leading-relaxed whitespace-pre-wrap">
-                        {m.message_text}
-                      </p>
+                      {/* DIRECT OVERRIDE FORM LINE */}
+                      <form onSubmit={handleSendOperatorMessage} className="flex-1 flex border border-[#111111]">
+                        <div className="bg-[#fafafa] border-r border-[#111111] px-3 flex items-center">
+                          <Terminal className="h-3.5 w-3.5 text-gray-500" />
+                        </div>
+                        <input
+                          type="text"
+                          disabled={activeDeal.status === "TERMINATED" || activeDeal.status === "MATCHED"}
+                          placeholder={
+                            activeDeal.status === "MATCHED" 
+                              ? "DEAL SETTLED. COMMENCING ESCROW."
+                              : activeDeal.status === "TERMINATED"
+                              ? "POOL FORCEFULLY TERMINATED."
+                              : "INJECT DIRECT OVERRIDE MESSAGE COMMAND OR TYPE 'approve'..."
+                          }
+                          value={operatorMsg}
+                          onChange={(e) => setOperatorMessage(e.target.value)}
+                          className="flex-1 px-3 py-2.5 font-mono text-xs uppercase bg-white focus:outline-none focus:bg-[#fafafa] disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!operatorMsg.trim() || activeDeal.status === "TERMINATED" || activeDeal.status === "MATCHED"}
+                          className="bg-white hover:bg-gray-100 border-l border-[#111111] px-4 font-mono text-xs font-bold uppercase text-[#111111] transition-colors duration-100 disabled:opacity-50"
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                        </button>
+                      </form>
+
+                      {/* STEP EXCHANGE ROUND ACTION TRIGGER BUTTON */}
+                      <button
+                        onClick={handleStepExchange}
+                        disabled={stepping || activeDeal.status !== "ACTIVE"}
+                        className={`px-5 py-2.5 font-mono text-xs font-bold uppercase border border-[#111111] flex items-center gap-2 transition-all duration-100 ${
+                          activeDeal.status === "ACTIVE" 
+                            ? "bg-[#111111] text-white hover:bg-gray-800 shadow-[2px_2px_0px_rgba(17,17,17,1)] active:translate-y-0.5 active:shadow-[1px_1px_0px_rgba(17,17,17,1)]" 
+                            : "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
+                        }`}
+                      >
+                        {stepping ? (
+                          <>
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            CALCULATING TURNS...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="h-3.5 w-3.5 fill-current" />
+                            STEP EXCHANGE ROUND
+                          </>
+                        )}
+                      </button>
+
                     </div>
-
                   </div>
-                );
-              })
-            ) : (
-              <div className="h-full w-full flex flex-col items-center justify-center text-center p-8 border border-dashed border-gray-300">
-                <Database className="h-8 w-8 text-gray-300 mb-2" />
-                <h3 className="font-mono text-sm font-bold uppercase text-gray-400 mb-1">
-                  NO SESSION ELECTED
-                </h3>
-                <p className="font-mono text-[10px] text-gray-400 max-w-[280px]">
-                  CHOOSE AN ACTIVE TRADING POOL IN THE HISTORY INDEX OR GENERATE A NEW BULK ASSET LOT TO TRIGGER AUTOMATED NEGOTIATING AGENTS.
-                </p>
+                ) : null}
               </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* BOTTOM TERMINAL OVERRIDE & STEP BAR */}
-          <div className="border-t border-[#111111] bg-white p-3 shrink-0">
-            {activeDeal ? (
-              <div className="flex flex-col gap-2">
-                
-                {/* INSTRUCTION TIPS SUB-BAR */}
-                <div className="flex justify-between items-center px-1">
-                  <div className="flex gap-2">
-                    <span className="font-mono text-[9px] font-bold uppercase text-gray-500">
-                      OPERATOR CLI CHEATSHEETS:
-                    </span>
-                    <span className="font-mono text-[9px] text-gray-600 bg-gray-100 px-1 font-bold">
-                      "approve" (BUMPS BUYER CAP +100)
-                    </span>
-                    <span className="font-mono text-[9px] text-gray-600 bg-gray-100 px-1 font-bold">
-                      "terminate" (FORCE HALT DEAL)
-                    </span>
-                  </div>
-                  <span className="font-mono text-[9px] font-bold text-gray-500 uppercase">
-                    STATUS: {activeDeal.status}
-                  </span>
-                </div>
-
-                <div className="flex gap-2 items-stretch">
-                  
-                  {/* DIRECT OVERRIDE FORM LINE */}
-                  <form onSubmit={handleSendOperatorMessage} className="flex-1 flex border border-[#111111]">
-                    <div className="bg-[#fafafa] border-r border-[#111111] px-3 flex items-center">
-                      <Terminal className="h-3.5 w-3.5 text-gray-500" />
-                    </div>
-                    <input
-                      type="text"
-                      disabled={activeDeal.status === "TERMINATED" || activeDeal.status === "MATCHED"}
-                      placeholder={
-                        activeDeal.status === "MATCHED" 
-                          ? "DEAL SETTLED. COMMENCING ESCROW."
-                          : activeDeal.status === "TERMINATED"
-                          ? "POOL FORCEFULLY TERMINATED."
-                          : "INJECT DIRECT OVERRIDE MESSAGE COMMAND OR TYPE 'approve'..."
-                      }
-                      value={operatorMsg}
-                      onChange={(e) => setOperatorMessage(e.target.value)}
-                      className="flex-1 px-3 py-2.5 font-mono text-xs uppercase bg-white focus:outline-none focus:bg-[#fafafa] disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!operatorMsg.trim() || activeDeal.status === "TERMINATED" || activeDeal.status === "MATCHED"}
-                      className="bg-white hover:bg-gray-100 border-l border-[#111111] px-4 font-mono text-xs font-bold uppercase text-[#111111] transition-colors duration-100 disabled:opacity-50"
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                    </button>
-                  </form>
-
-                  {/* STEP EXCHANGE ROUND ACTION TRIGGER BUTTON */}
-                  <button
-                    onClick={handleStepExchange}
-                    disabled={stepping || activeDeal.status !== "ACTIVE"}
-                    className={`px-5 py-2.5 font-mono text-xs font-bold uppercase border border-[#111111] flex items-center gap-2 transition-all duration-100 ${
-                      activeDeal.status === "ACTIVE" 
-                        ? "bg-[#111111] text-white hover:bg-gray-800 shadow-[2px_2px_0px_rgba(17,17,17,1)] active:translate-y-0.5 active:shadow-[1px_1px_0px_rgba(17,17,17,1)]" 
-                        : "bg-gray-100 border-gray-300 text-gray-400 cursor-not-allowed"
-                    }`}
-                  >
-                    {stepping ? (
-                      <>
-                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        CALCULATING TURNS...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-3.5 w-3.5 fill-current" />
-                        STEP EXCHANGE ROUND
-                      </>
-                    )}
-                  </button>
-
-                </div>
-              </div>
-            ) : null}
-          </div>
+            </>
 
         </section>
 
         {/* RIGHT HAND LIQUIDITY DEPTH SIDEBAR */}
-        <aside className="w-96 min-h-0 border-l border-[#111111] bg-white p-4 overflow-y-auto shrink-0 flex flex-col gap-4">
+        <aside className="w-96 min-h-0 border-l border-[#111111] bg-white p-4 shrink-0 flex flex-col gap-4 overflow-hidden">
           
-          <div className="border-b border-[#111111] pb-2">
+          <div className="border-b border-[#111111] pb-2 shrink-0">
             <span className="font-mono text-xs font-bold uppercase tracking-wider text-[#111111] block mb-0.5">
               LIQUIDITY DEPTH LEDGER
             </span>
@@ -791,117 +1215,129 @@ export default function Home() {
 
           {activeDeal ? (
             <>
-              {/* CURRENT ACTIVE OFFER SPREAD BOX */}
-              <div className="border border-[#111111] p-3 bg-[#fafafa]">
-                <div className="flex justify-between items-center">
-                  <span className="font-mono text-[10px] font-bold text-gray-500 uppercase">
-                    ACTIVE BOOK SPREAD:
-                  </span>
-                  <span className="font-mono text-sm font-bold text-[#111111] bg-white border border-[#111111] px-1.5 py-0.5 select-all">
-                    {spread}
-                  </span>
-                </div>
-                {activeDeal.status === "DEADLOCK" && (
-                  <div className="mt-2.5 border border-red-500 bg-red-50 p-2 text-red-800 flex gap-2 items-start">
-                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span className="font-mono text-[9px] font-bold leading-normal uppercase">
-                      CRITICAL DEADLOCK STALL: ALL OFFERS HAVE REACHED ABSOLUTE CAP AND FLOOR LIMITS.
+              {/* TOP LEDGER SECTIONS */}
+              <div className="flex-none overflow-y-auto space-y-4 max-h-[45%] pr-1 min-h-0 shrink-0">
+                {/* CURRENT ACTIVE OFFER SPREAD BOX */}
+                <div className="border border-[#111111] p-3 bg-[#fafafa]">
+                  <div className="flex justify-between items-center">
+                    <span className="font-mono text-[10px] font-bold text-gray-500 uppercase">
+                      ACTIVE BOOK SPREAD:
+                    </span>
+                    <span className="font-mono text-sm font-bold text-[#111111] bg-white border border-[#111111] px-1.5 py-0.5 select-all">
+                      {spread}
                     </span>
                   </div>
-                )}
-                {activeDeal.status === "MATCHED" && (
-                  <div className="mt-2.5 border border-emerald-500 bg-emerald-50 p-2 text-emerald-800 flex gap-2 items-start">
-                    <Check className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span className="font-mono text-[9px] font-bold leading-normal uppercase">
-                      SETTLEMENT MATCH CONFIRMED: CONTRACT HAS BEEN ESCROW REGISTERED.
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* TRADING LEDGER SPLIT GRID */}
-              <div className="space-y-4">
-                
-                {/* BUYERS LEDGER (BIDS) */}
-                <div>
-                  <div className="font-mono text-[10px] font-bold text-[#111111] border-b border-dashed border-gray-400 pb-1 mb-2 uppercase tracking-wide">
-                    BUYER POSITION (BID)
-                  </div>
-                  <div className="space-y-1.5">
-                    {bids.map((b) => {
-                      const isHumanBid = b.name === "Buyer (You)";
-                      return (
-                        <div 
-                          key={b.id} 
-                          className={`border p-2 text-xs font-mono flex justify-between items-center ${
-                            isHumanBid
-                              ? "border-amber-500 bg-amber-50/40 font-bold"
-                              : "border-blue-200 bg-blue-50/20"
-                          }`}
-                        >
-                          <div className="flex flex-col gap-0.5">
-                            <span className={isHumanBid ? "text-amber-950" : "text-blue-900"}>{b.name}</span>
-                            <span className={`text-[9px] uppercase ${isHumanBid ? "text-amber-800" : "text-blue-500"}`}>
-                              BUDGET CAP: {b.hidden_floor_ceil} EUR
-                            </span>
-                          </div>
-                          <span className={`text-xs font-bold px-2 py-1 border ${
-                            isHumanBid 
-                              ? "text-amber-950 bg-white border-amber-500" 
-                              : "text-gray-900 bg-white border-blue-300"
-                          }`}>
-                            {b.current_price_point ? `${b.current_price_point} EUR` : "NO OFFER"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {activeDeal.status === "DEADLOCK" && (
+                    <div className="mt-2.5 border border-red-500 bg-red-50 p-2 text-red-800 flex gap-2 items-start">
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span className="font-mono text-[9px] font-bold leading-normal uppercase">
+                        CRITICAL DEADLOCK STALL: ALL OFFERS HAVE REACHED ABSOLUTE CAP AND FLOOR LIMITS.
+                      </span>
+                    </div>
+                  )}
+                  {activeDeal.status === "MATCHED" && (
+                    <div className="mt-2.5 border border-emerald-500 bg-emerald-50 p-2 text-emerald-800 flex gap-2 items-start">
+                      <Check className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span className="font-mono text-[9px] font-bold leading-normal uppercase">
+                        SETTLEMENT MATCH CONFIRMED: CONTRACT HAS BEEN ESCROW REGISTERED.
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                {/* SELLERS LEDGER (ASKS) */}
-                <div>
-                  <div className="font-mono text-[10px] font-bold text-[#111111] border-b border-dashed border-gray-400 pb-1 mb-2 uppercase tracking-wide">
-                    SELLER POSITION (ASK)
-                  </div>
-                  <div className="space-y-1.5">
-                    {asks.map((s) => {
-                      const isHumanAsk = s.name === "Seller (You)";
-                      return (
-                        <div 
-                          key={s.id} 
-                          className={`border p-2 text-xs font-mono flex justify-between items-center ${
-                            isHumanAsk
-                              ? "border-amber-500 bg-amber-50/40 font-bold"
-                              : "border-gray-300 bg-white"
-                          }`}
-                        >
-                          <div className="flex flex-col gap-0.5">
-                            <span className={isHumanAsk ? "text-amber-950" : "text-gray-800"}>{s.name}</span>
-                            <span className={`text-[9px] uppercase ${isHumanAsk ? "text-amber-800" : "text-gray-400"}`}>
-                              RESERVATION FLOOR: {s.hidden_floor_ceil} EUR
+                {/* TRADING LEDGER SPLIT GRID */}
+                <div className="space-y-4">
+                  
+                  {/* BUYERS LEDGER (BIDS) */}
+                  <div>
+                    <div className="font-mono text-[10px] font-bold text-[#111111] border-b border-dashed border-gray-400 pb-1 mb-2 uppercase tracking-wide">
+                      BUYER POSITION (BID)
+                    </div>
+                    <div className="space-y-1.5">
+                      {bids.map((b) => {
+                        const isHumanBid = b.name === "Buyer (You)";
+                        return (
+                          <div 
+                            key={b.id} 
+                            className={`border p-2 text-xs font-mono flex justify-between items-center ${
+                              isHumanBid
+                                ? "border-amber-500 bg-amber-50/40 font-bold"
+                                : "border-blue-200 bg-blue-50/20"
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className={isHumanBid ? "text-amber-950" : "text-blue-900"}>{b.name}</span>
+                              <span className={`text-[9px] uppercase ${isHumanBid ? "text-amber-800" : "text-blue-500"}`}>
+                                BUDGET CAP: {b.hidden_floor_ceil} EUR
+                              </span>
+                            </div>
+                            <span className={`text-xs font-bold px-2 py-1 border ${
+                              isHumanBid 
+                                ? "text-amber-950 bg-white border-amber-500" 
+                                : "text-gray-900 bg-white border-blue-300"
+                            }`}>
+                              {b.current_price_point ? `${b.current_price_point} EUR` : "NO OFFER"}
                             </span>
                           </div>
-                          <span className={`text-xs font-bold px-2 py-1 border ${
-                            isHumanAsk
-                              ? "text-amber-950 bg-white border-amber-500"
-                              : "text-gray-900 bg-[#fafafa] border-gray-400"
-                          }`}>
-                            {s.current_price_point ? `${s.current_price_point} EUR` : "NO OFFER"}
-                          </span>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
 
+                  {/* SELLERS LEDGER (ASKS) */}
+                  <div>
+                    <div className="font-mono text-[10px] font-bold text-[#111111] border-b border-dashed border-gray-400 pb-1 mb-2 uppercase tracking-wide">
+                      SELLER POSITION (ASK)
+                    </div>
+                    <div className="space-y-1.5">
+                      {asks.map((s) => {
+                        const isHumanAsk = s.name === "Seller (You)";
+                        return (
+                          <div 
+                            key={s.id} 
+                            className={`border p-2 text-xs font-mono flex justify-between items-center ${
+                              isHumanAsk
+                                ? "border-amber-500 bg-amber-50/40 font-bold"
+                                : "border-gray-300 bg-white"
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className={isHumanAsk ? "text-amber-950" : "text-gray-800"}>{s.name}</span>
+                              <span className={`text-[9px] uppercase ${isHumanAsk ? "text-amber-800" : "text-gray-400"}`}>
+                                RESERVATION FLOOR: {s.hidden_floor_ceil} EUR
+                              </span>
+                            </div>
+                            <span className={`text-xs font-bold px-2 py-1 border ${
+                              isHumanAsk
+                                ? "text-amber-950 bg-white border-amber-500"
+                                : "text-gray-900 bg-[#fafafa] border-gray-400"
+                            }`}>
+                              {s.current_price_point ? `${s.current_price_point} EUR` : "NO OFFER"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                </div>
               </div>
 
               {/* MARKET SPECIFICATION REPORT */}
-              <div className="flex-1 flex flex-col gap-1.5 mt-2 border-t border-[#111111] pt-3 overflow-hidden">
-                <span className="font-mono text-[10px] font-bold text-gray-500 uppercase block">
-                  INJECTED LOT CONTRACT SPECIFICATIONS:
-                </span>
-                <div className="border border-gray-300 bg-white p-3 font-mono text-[10px] leading-relaxed text-gray-700 overflow-y-auto h-48 select-text border-solid">
+              <div className="flex-1 flex flex-col gap-1.5 mt-2 border-t border-[#111111] pt-3 overflow-hidden min-h-0">
+                <div className="flex justify-between items-center mb-1 shrink-0">
+                  <span className="font-mono text-[10px] font-bold text-gray-500 uppercase">
+                    INJECTED LOT CONTRACT SPECIFICATIONS:
+                  </span>
+                  <button 
+                    onClick={() => setIsSpecsExpanded(true)}
+                    className="p-1 border border-gray-300 hover:bg-gray-100 bg-white text-[#111111] transition-all flex items-center justify-center shrink-0"
+                    title="Expand Specifications to Full View"
+                  >
+                    <Maximize2 className="h-3 w-3" />
+                  </button>
+                </div>
+                <div className="border border-gray-300 bg-white p-3 font-mono text-[10px] leading-relaxed text-gray-700 overflow-y-auto flex-1 select-text border-solid min-h-0">
                   <div className="space-y-1">
                     {renderMarkdown(activeDeal.technical_specs)}
                   </div>
@@ -918,6 +1354,218 @@ export default function Home() {
         </aside>
 
       </div>
+
+      {/* FULL SCREEN CONTRACT SPECIFICATIONS OVERLAY MODAL */}
+      {isSpecsExpanded && activeDeal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 animate-fade-in backdrop-blur-sm">
+          <div className="w-full max-w-4xl h-[85vh] bg-white border-2 border-[#111111] flex flex-col shadow-[8px_8px_0px_rgba(17,17,17,1)] overflow-hidden">
+            {/* Modal Header */}
+            <div className="h-14 bg-[#111111] text-white px-4 flex items-center justify-between font-mono text-xs font-bold uppercase tracking-wider shrink-0 border-b border-[#111111]">
+              <div className="flex items-center gap-2">
+                <Terminal className="h-4.5 w-4.5 text-white" />
+                <span>LOT: {activeDeal.item_name} — FULL CONTRACT SPECIFICATIONS</span>
+              </div>
+              <button
+                onClick={() => setIsSpecsExpanded(false)}
+                className="border border-white px-3 py-1.5 bg-white text-[#111111] hover:bg-gray-100 transition-all flex items-center gap-1.5 text-[10px] font-bold"
+                title="Collapse to sidebar"
+              >
+                <Minimize2 className="h-3.5 w-3.5" />
+                <span>COLLAPSE VIEW [ESC]</span>
+              </button>
+            </div>
+            
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-8 font-mono text-xs text-gray-800 leading-relaxed select-text bg-white space-y-4">
+              <div className="max-w-3xl mx-auto space-y-2">
+                {renderMarkdown(activeDeal.technical_specs)}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="h-10 bg-[#fafafa] border-t border-[#111111] px-4 flex items-center justify-between shrink-0 font-mono text-[9px] text-gray-500 uppercase font-bold">
+              <span>SECURITY AUTH: LEVEL 4 ROOT ESCROW OPERATOR</span>
+              <span>ATIRA PROCUREMENT CONTRACT INDEX PROTOCOL v1.0</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULL SCREEN MULTIMODAL INGESTION TERMINAL OVERLAY MODAL */}
+      {isIngestionFullView && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 animate-fade-in backdrop-blur-sm">
+          <div className="w-full max-w-5xl h-[85vh] bg-white border-2 border-[#111111] flex flex-col shadow-[8px_8px_0px_rgba(17,17,17,1)] overflow-hidden">
+            {/* Modal Header */}
+            <div className="h-14 bg-[#111111] text-white px-4 flex items-center justify-between font-mono text-xs font-bold uppercase tracking-wider shrink-0 border-b border-[#111111]">
+              <div className="flex items-center gap-2">
+                <Terminal className="h-4.5 w-4.5 text-white animate-pulse" />
+                <span>MULTIMODAL INGESTION TERMINAL (FULL VIEW)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsIngestionFullView(false)}
+                className="border border-white px-3 py-1.5 bg-white text-[#111111] hover:bg-gray-100 transition-all flex items-center gap-1.5 text-[10px] font-bold cursor-pointer"
+                title="Collapse to sidebar"
+              >
+                <Minimize2 className="h-3.5 w-3.5" />
+                <span>COLLAPSE VIEW [ESC]</span>
+              </button>
+            </div>
+            
+            {/* Modal Body */}
+            {ingesting ? (
+              /* PROGRESS SCANNER CONSOLE (MAXIMIZED VIEW) */
+              <div className="flex-1 bg-black text-[#00ff00] p-10 font-mono text-xs leading-relaxed flex flex-col justify-center overflow-y-auto">
+                <div className="max-w-2xl mx-auto w-full space-y-6 p-8 border border-[#00ff00]/30 bg-black shadow-[0_0_30px_rgba(0,255,0,0.07)]">
+                  <div className="flex items-center gap-3 text-sm font-bold border-b border-[#00ff00]/30 pb-4 mb-4">
+                    <span className="animate-ping h-2.5 w-2.5 bg-[#00ff00] rounded-none shrink-0"></span>
+                    <span>INGESTION PROTOCOL INITIATED — RUNNING AUTOMATED EXTRACTION...</span>
+                  </div>
+                  
+                  {/* Step 1: SCANNING */}
+                  <div className="flex items-center justify-between p-2.5 border border-transparent hover:border-[#00ff00]/20 transition-all">
+                    <span className={parseStep === "SCANNING" ? "animate-pulse font-bold text-sm" : ""}>
+                      {parseStep === "SCANNING" ? "[◷]" : ["EXTRACTING", "RESEARCH", "SEEDING"].includes(parseStep) || parseStep === "" ? "[✔]" : "[ ]"} STAGE 1: SCANNING FILE METADATA & INTEGRITY
+                    </span>
+                    {parseStep === "SCANNING" && <span className="text-[10px] animate-pulse font-bold">PROCESSING...</span>}
+                  </div>
+
+                  {/* Step 2: EXTRACTING */}
+                  <div className="flex items-center justify-between p-2.5 border border-transparent hover:border-[#00ff00]/20 transition-all">
+                    <span className={parseStep === "EXTRACTING" ? "animate-pulse font-bold text-sm" : ""}>
+                      {parseStep === "EXTRACTING" ? "[◷]" : ["RESEARCH", "SEEDING"].includes(parseStep) || parseStep === "" ? "[✔]" : "[ ]"} STAGE 2: FIELDS EXTRACTION (FAL.AI BAGEL VISION VLM)
+                    </span>
+                    {parseStep === "EXTRACTING" && <span className="text-[10px] animate-pulse font-bold">PROCESSING...</span>}
+                  </div>
+
+                  {/* Step 3: RESEARCH */}
+                  <div className="flex items-center justify-between p-2.5 border border-transparent hover:border-[#00ff00]/20 transition-all">
+                    <span className={parseStep === "RESEARCH" ? "animate-pulse font-bold text-sm" : ""}>
+                      {parseStep === "RESEARCH" ? "[◷]" : ["SEEDING"].includes(parseStep) || parseStep === "" ? "[✔]" : "[ ]"} STAGE 3: TAVILY MARKET GROUNDING & SPEC BENCHMARKS
+                    </span>
+                    {parseStep === "RESEARCH" && <span className="text-[10px] animate-pulse font-bold">PROCESSING...</span>}
+                  </div>
+
+                  {/* Step 4: SEEDING */}
+                  <div className="flex items-center justify-between p-2.5 border border-transparent hover:border-[#00ff00]/20 transition-all">
+                    <span className={parseStep === "SEEDING" ? "animate-pulse font-bold text-sm" : ""}>
+                      {parseStep === "SEEDING" ? "[◷]" : parseStep === "" ? "[✔]" : "[ ]"} STAGE 4: PG SEEDING & FASTINO PIONEER OBSERVABILITY TRACE
+                    </span>
+                    {parseStep === "SEEDING" && <span className="text-[10px] animate-pulse font-bold text-[#00ff00]">COMMIT...</span>}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* INPUT AND DRAG-DROP WORKSPACE (MAXIMIZED VIEW) */
+              <form onSubmit={handleSubmitCombined} className="flex-1 flex flex-col min-h-0 bg-white">
+                <div className="flex-1 flex p-6 gap-6 min-h-0">
+                  {/* Left Column: Spacious Monospace Textarea */}
+                  <div className="flex-1 flex flex-col gap-2 min-h-0">
+                    <label className="font-mono text-[10px] font-bold text-gray-500 uppercase shrink-0">
+                      PASTE MESSY RFQ EMAIL OR UNSTRUCTURED TEXT COPIES:
+                    </label>
+                    <textarea
+                      value={rfqText}
+                      onChange={(e) => setRfqText(e.target.value)}
+                      placeholder="PASTE MESSY EMAIL CHAINS, PROCUREMENT PDF SPECIFICATIONS, REQ SHEETS OR DRAG FILES OVER..."
+                      className="w-full flex-1 border border-[#111111] bg-white p-4 font-mono text-xs text-[#111111] focus:outline-none placeholder-gray-400 leading-relaxed resize-none focus:bg-[#fafafa]"
+                      disabled={ingesting}
+                    />
+                  </div>
+                  
+                  {/* Right Column: High-Fidelity Drag and Drop + Action Panel */}
+                  <div className="w-96 flex flex-col gap-4 border-l border-gray-200 pl-6 shrink-0 min-h-0 justify-between">
+                    <div className="flex-1 flex flex-col gap-4 min-h-0 overflow-y-auto">
+                      <div className="flex flex-col gap-2 shrink-0">
+                        <label className="font-mono text-[10px] font-bold text-gray-500 uppercase">
+                          ATTACH DOCUMENTS OR IMAGES:
+                        </label>
+                        <div 
+                          onClick={() => document.getElementById("rfq-file-input-full")?.click()}
+                          className="border-2 border-dashed border-gray-300 hover:border-[#111111] bg-[#fafafa] hover:bg-[#f3f3f3] transition-all duration-150 p-6 flex flex-col items-center justify-center text-center cursor-pointer min-h-[160px] shrink-0"
+                        >
+                          <Paperclip className="h-6 w-6 text-gray-400 mb-2 animate-pulse" />
+                          <span className="font-mono text-[10px] font-bold text-[#111111] uppercase">
+                            DRAG & DROP FILE OR CLICK TO BROWSE
+                          </span>
+                          <span className="font-mono text-[8px] text-gray-400 uppercase mt-1 leading-normal">
+                            SUPPORTS PDF, DOCX, XLSX, TXT, PNG, JPG, JPEG, WEBP
+                          </span>
+                        </div>
+                        <input
+                          type="file"
+                          id="rfq-file-input-full"
+                          className="hidden"
+                          onChange={handleFileChange}
+                          accept=".docx,.pdf,.xlsx,.xls,.txt,.png,.jpg,.jpeg,.webp,.gif"
+                          disabled={ingesting}
+                        />
+                      </div>
+                      
+                      {selectedFile && (
+                        /* FILE PREVIEW COMPONENT */
+                        <div className="border border-[#111111] p-3 bg-white flex flex-col gap-2 shadow-[4px_4px_0px_rgba(17,17,17,1)] shrink-0">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-[#fafafa] border border-[#111111] flex items-center justify-center shrink-0">
+                              {(() => {
+                                const ext = selectedFile.name.split(".").pop()?.toLowerCase();
+                                if (["png", "jpg", "jpeg", "webp", "gif"].includes(ext || "")) {
+                                  return <FileImage className="h-6 w-6 text-[#111111]" />;
+                                }
+                                if (["xlsx", "xls"].includes(ext || "")) {
+                                  return <FileSpreadsheet className="h-6 w-6 text-[#111111]" />;
+                                }
+                                return <FileText className="h-6 w-6 text-[#111111]" />;
+                              })()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-mono text-[10px] font-bold text-[#111111] truncate uppercase">
+                                {selectedFile.name}
+                              </div>
+                              <div className="font-mono text-[8px] text-gray-400 uppercase mt-0.5">
+                                {(selectedFile.size / 1024).toFixed(1)} KB
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedFile(null);
+                              }}
+                              className="p-1 text-gray-400 hover:text-red-500 font-mono text-xs font-bold transition-all hover:bg-gray-50 border border-transparent hover:border-gray-200 cursor-pointer"
+                              title="Remove attached file"
+                            >
+                              [X]
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Primary Trigger Ingest */}
+                    <div className="shrink-0 pt-4 border-t border-gray-100">
+                      <button
+                        type="submit"
+                        disabled={ingesting || (!rfqText.trim() && !selectedFile)}
+                        className="w-full bg-[#111111] text-white font-mono text-xs font-bold uppercase py-3.5 hover:bg-gray-800 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-[4px_4px_0px_rgba(0,0,0,0.15)] cursor-pointer"
+                      >
+                        <Terminal className="h-4 w-4 text-white shrink-0 animate-pulse" />
+                        <span>INGEST & SEED POSTGRES ROOM</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            )}
+            
+            {/* Modal Footer */}
+            <div className="h-10 bg-[#fafafa] border-t border-[#111111] px-4 flex items-center justify-between shrink-0 font-mono text-[9px] text-gray-500 uppercase font-bold">
+              <span>SECURITY AUTH: LEVEL 4 ROOT ESCROW OPERATOR</span>
+              <span>ATIRA MULTIMODAL INBOUND PARSER PIPELINE v1.0</span>
+            </div>
+          </div>
+        </div>
+      )}
 
     </main>
   );
