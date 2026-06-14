@@ -4,6 +4,14 @@ ATIRAA is a production-grade, dual-perspective bilateral B2B procurement, escrow
 
 Enterprise operators can view active negotiation pipelines, toggle strategic posturing (Transactional Distributive vs. Collaborative Integrative), intervene via a mathematical **Tactical Cognitive Response Board**, handle deadlocks with administrative overrides, and export legally binding vector PDF escrow contracts.
 
+![Main Screen for Agents to dicuss & Negotiate](https://github.com/WahidSaeed/MunichAIHackathon/blob/main/atiraa_main_screen_agent_negotiation.png)
+
+![LOT Full Contract Specs](https://github.com/WahidSaeed/MunichAIHackathon/blob/main/lot_full_contract_specs.png)
+
+![Agents Activity Dashboard](https://github.com/WahidSaeed/MunichAIHackathon/blob/main/atiraa_agents_dashboard.png)
+
+![Inventory Catalogs for Buyer Agents](https://github.com/WahidSaeed/MunichAIHackathon/blob/main/inventory_catalogs.png)
+
 ---
 
 ## 🏗️ System Architecture
