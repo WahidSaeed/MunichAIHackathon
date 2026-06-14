@@ -23,8 +23,14 @@ import {
   ChevronDown,
   ChevronRight,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Upload,
+  FileText,
+  FileSpreadsheet,
+  FileImage,
+  Paperclip
 } from "lucide-react";
+
 
 const parseInlineMarkdown = (text: string) => {
   let parts: React.ReactNode[] = [text];
@@ -144,6 +150,92 @@ interface Deal {
   messages: Message[];
 }
 
+const renderFormattedText = (text: string) => {
+  if (!text) return null;
+
+  let parts: React.ReactNode[] = [text];
+
+  // 1. Parse highlight: ==highlight==
+  parts = parts.flatMap((part) => {
+    if (typeof part !== "string") return part;
+    const pieces = part.split(/==([^=]+)==/g);
+    return pieces.map((piece, i) =>
+      i % 2 === 1 ? (
+        <mark
+          key={i}
+          className="bg-yellow-200 text-black px-1 font-bold border-b border-yellow-500 rounded-none inline-block leading-none"
+        >
+          {piece}
+        </mark>
+      ) : (
+        piece
+      )
+    );
+  });
+
+  // 2. Parse bold: **bold**
+  parts = parts.flatMap((part) => {
+    if (typeof part !== "string") return part;
+    const pieces = part.split(/\*\*([^*]+)\*\*/g);
+    return pieces.map((piece, i) =>
+      i % 2 === 1 ? (
+        <strong key={i} className="font-bold text-[#111111]">
+          {piece}
+        </strong>
+      ) : (
+        piece
+      )
+    );
+  });
+
+  // 3. Parse strikethrough: ~~strikethrough~~
+  parts = parts.flatMap((part) => {
+    if (typeof part !== "string") return part;
+    const pieces = part.split(/~~([^~]+)~~/g);
+    return pieces.map((piece, i) =>
+      i % 2 === 1 ? (
+        <span key={i} className="line-through opacity-60">
+          {piece}
+        </span>
+      ) : (
+        piece
+      )
+    );
+  });
+
+  // 4. Parse double underscore: __underline__
+  parts = parts.flatMap((part) => {
+    if (typeof part !== "string") return part;
+    const pieces = part.split(/__([^_]+)__/g);
+    return pieces.map((piece, i) =>
+      i % 2 === 1 ? (
+        <span key={i} className="underline decoration-[#111111] underline-offset-2 font-semibold">
+          {piece}
+        </span>
+      ) : (
+        piece
+      )
+    );
+  });
+
+  // 5. Parse single underscore: _underline_
+  parts = parts.flatMap((part) => {
+    if (typeof part !== "string") return part;
+    const pieces = part.split(/_([^_]+)_/g);
+    return pieces.map((piece, i) =>
+      i % 2 === 1 ? (
+        <span key={i} className="underline decoration-[#111111] underline-offset-2">
+          {piece}
+        </span>
+      ) : (
+        piece
+      )
+    );
+  });
+
+  return <>{parts}</>;
+};
+
 export default function Home() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
@@ -158,6 +250,12 @@ export default function Home() {
   const [activeDrawer, setActiveDrawer] = useState<"BUYER" | "SELLER" | null>("BUYER");
   const [rfqText, setRfqText] = useState("");
   const [ingesting, setIngesting] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [parseStep, setParseStep] = useState("");
+  const [isIngestionExpanded, setIsIngestionExpanded] = useState(true);
+  const [isIngestionFullView, setIsIngestionFullView] = useState(false);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
   const prevActiveDealIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef<number>(0);
@@ -166,11 +264,12 @@ export default function Home() {
   const [pioneerStream, setPioneerStream] = useState<any[]>([]);
   const [isSpecsExpanded, setIsSpecsExpanded] = useState(false);
 
-  // Close specs overlay on ESC key press
+  // Close overlay modals on ESC key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setIsSpecsExpanded(false);
+        setIsIngestionFullView(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -278,6 +377,19 @@ export default function Home() {
     e.preventDefault();
     if (!rfqText.trim() || ingesting) return;
     setIngesting(true);
+    
+    // Simulate real-time progress steps for beautiful console indicators
+    setParseStep("SCANNING");
+    await new Promise(r => setTimeout(r, 800));
+    
+    setParseStep("EXTRACTING");
+    await new Promise(r => setTimeout(r, 1000));
+    
+    setParseStep("RESEARCH");
+    await new Promise(r => setTimeout(r, 1000));
+    
+    setParseStep("SEEDING");
+    
     try {
       const res = await fetch("http://localhost:8080/api/deals/ingest", {
         method: "POST",
@@ -290,19 +402,111 @@ export default function Home() {
       const data = await res.json();
       if (data.status === "SUCCESS") {
         setRfqText("");
+        setParseStep("");
         await fetchDeals();
         setActiveDealId(data.deal_id);
         setActiveDrawer("BUYER");
+        setIsIngestionFullView(false);
       } else {
         alert("Ingestion failed: " + (data.detail || "Unknown error"));
+        setParseStep("");
       }
     } catch (err) {
       console.error("Error during unstructured RFQ ingestion:", err);
       alert("Error occurred during RFQ ingestion. Please check if the backend is running.");
+      setParseStep("");
     } finally {
       setIngesting(false);
     }
   };
+
+  // Drag and drop event handlers
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      setSelectedFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  // Ingest Document / Image File RFQ
+  const handleIngestFile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFile || ingesting) return;
+    setIngesting(true);
+    
+    // Simulate real-time progress steps for beautiful console indicators
+    setParseStep("SCANNING");
+    await new Promise(r => setTimeout(r, 1000));
+    
+    setParseStep("EXTRACTING");
+    await new Promise(r => setTimeout(r, 1200));
+    
+    setParseStep("RESEARCH");
+    await new Promise(r => setTimeout(r, 1200));
+    
+    setParseStep("SEEDING");
+    
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      
+      const res = await fetch("http://localhost:8080/api/deals/ingest-file", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!res.ok) throw new Error("Failed to parse file or register deal.");
+      
+      const data = await res.json();
+      if (data.status === "SUCCESS") {
+        setSelectedFile(null);
+        setParseStep("");
+        await fetchDeals();
+        setActiveDealId(data.deal_id);
+        setActiveDrawer("BUYER");
+        setIsIngestionFullView(false);
+      } else {
+        alert("Ingestion failed: " + (data.detail || "Unknown error"));
+        setParseStep("");
+      }
+    } catch (err: any) {
+      console.error("Error during file ingestion:", err);
+      alert("Error occurred during file ingestion: " + err.message);
+      setParseStep("");
+    } finally {
+      setIngesting(false);
+    }
+  };
+
+
+  // Unified submission handler for text and file ingestion
+  const handleSubmitCombined = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedFile) {
+      await handleIngestFile(e);
+    } else {
+      await handleIngestRFQ(e);
+    }
+  };
+
 
   // Step the multi-agent negotiation loop
   const handleStepExchange = async () => {
@@ -425,7 +629,30 @@ export default function Home() {
   };
 
   return (
-    <main className="h-screen w-screen flex flex-col font-sans select-none antialiased bg-[#fafafa]">
+    <main 
+      onDragEnter={handleDrag}
+      onDragOver={handleDrag}
+      onDragLeave={handleDrag}
+      onDrop={handleDrop}
+      className="h-screen w-screen flex flex-col font-sans select-none antialiased bg-[#fafafa] relative"
+    >
+      {dragActive && (
+        <div
+          onDragEnter={handleDrag}
+          onDragOver={handleDrag}
+          onDragLeave={handleDrag}
+          onDrop={handleDrop}
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 border-4 border-dashed border-emerald-500 font-mono p-4 text-center select-none"
+        >
+          <Upload className="h-12 w-12 text-emerald-500 animate-bounce mb-4" />
+          <h2 className="text-emerald-500 text-xl font-bold uppercase tracking-wider mb-2">
+            DROP RFQ FILE TO INGEST
+          </h2>
+          <p className="text-gray-400 text-xs uppercase max-w-md">
+            Supported formats: DOCX, PDF, XLSX, TXT, PNG, JPG, WEBP, GIF
+          </p>
+        </div>
+      )}
       
       {/* GLOBAL HIGH-CONTRAST HEADER */}
       <header className="h-14 border-b border-[#111111] bg-white flex items-center justify-between px-4 z-10 shrink-0">
@@ -472,81 +699,143 @@ export default function Home() {
           {/* HISTORICAL SESSIONS LIST INDEX */}
           <div className="flex-1 flex flex-col p-2 space-y-2 bg-[#fafafa] min-h-0">
             
-            {showLotForm && (
-              <form onSubmit={handleCreateLot} className="border border-[#111111] p-3 bg-white space-y-3 shrink-0">
-                <div className="font-mono text-[11px] font-bold border-b border-[#111111] pb-1 uppercase flex justify-between items-center">
-                  <span>INITIALIZE {newPerspective} LOT</span>
-                  <button type="button" onClick={() => setShowLotForm(false)} className="hover:opacity-70">
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-                <div>
-                  <label className="font-mono text-[9px] font-bold text-gray-500 block mb-1 uppercase">
-                    ASSET LOT DESCRIPTOR / ITEM NAME
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="E.G. TITANIUM ROTOR ASSEMBLY"
-                    value={newLotName}
-                    onChange={(e) => setNewLotName(e.target.value)}
-                    className="w-full border border-[#111111] bg-white px-2 py-1.5 font-mono text-xs focus:outline-none focus:bg-[#fafafa]"
-                  />
-                </div>
-                <div>
-                  <label className="font-mono text-[9px] font-bold text-gray-500 block mb-1 uppercase">
-                    TARGET POOL BUDGET (EUR)
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min={500}
-                    max={5000}
-                    value={newBudget}
-                    onChange={(e) => setNewBudget(parseInt(e.target.value))}
-                    className="w-full border border-[#111111] bg-white px-2 py-1.5 font-mono text-xs focus:outline-none"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full bg-[#111111] text-white font-mono text-xs font-bold uppercase py-2 hover:bg-gray-800 disabled:opacity-50"
-                >
-                  {submitting ? "RUNNING TAVILY RESEARCH..." : "SPAWN ESCROW ROOM"}
-                </button>
-              </form>
-            )}
-
-            {/* INBOUND INGESTION TERMINAL BOX */}
+            {/* MULTIMODAL INGESTION TERMINAL BOX */}
             <div className="border border-[#111111] bg-white flex flex-col shrink-0">
-              <div className="bg-[#111111] text-white px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Terminal className="h-3 w-3 text-white animate-pulse" />
-                  <span>TRACK 2: INBOUND RFQ INGESTION</span>
-                </span>
-                <span className="bg-emerald-500 text-[8px] font-bold text-[#111111] px-1">
-                  LIVE_AI_PARSE
-                </span>
-              </div>
-              <form onSubmit={handleIngestRFQ} className="p-2 flex flex-col bg-white space-y-2">
-                <textarea
-                  rows={3}
-                  value={rfqText}
-                  onChange={(e) => setRfqText(e.target.value)}
-                  placeholder="PASTE MESSY RFQ EMAIL / RAW TEXT ASSETS..."
-                  className="w-full border border-[#111111] bg-white p-2 font-mono text-[9px] text-[#111111] focus:outline-none placeholder-gray-400 leading-normal resize-none focus:bg-[#fafafa]"
-                  disabled={ingesting}
-                  style={{ minHeight: "55px" }}
-                />
+              <div className="w-full bg-[#111111] text-white px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-wider flex items-center justify-between text-left">
+                <div className="flex items-center gap-1.5 flex-1 text-left">
+                  <Terminal className="h-3 w-3 text-white animate-pulse shrink-0" />
+                  <span>INGESTION TERMINAL</span>
+                </div>
                 <button
-                  type="submit"
-                  disabled={ingesting || !rfqText.trim()}
-                  className="w-full bg-[#111111] text-white font-mono text-[9px] font-bold uppercase py-1.5 hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-1.5 border border-[#111111] transition-all duration-100"
+                  type="button"
+                  onClick={() => setIsIngestionFullView(true)}
+                  className="p-1 hover:bg-gray-800 border border-gray-700 hover:border-gray-500 bg-transparent text-white transition-all flex items-center justify-center shrink-0 ml-1.5 cursor-pointer"
+                  title="Expand Ingestion Terminal to Full View"
                 >
-                  <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                  {ingesting ? "INGESTING & TAVILY GROUNDING..." : "INGEST & SEED POSTGRES"}
+                  <Maximize2 className="h-2.5 w-2.5 text-white" />
                 </button>
-              </form>
+              </div>
+
+              {ingesting ? (
+                    /* PROGRESS SCANNER MODULE */
+                    <div className="p-3 bg-black text-[#00ff00] font-mono text-[9px] leading-relaxed space-y-1.5 border-t border-[#111111]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="animate-ping h-1.5 w-1.5 bg-[#00ff00] rounded-none"></span>
+                        <span>INGESTION PROTOCOL INITIATED...</span>
+                      </div>
+                      
+                      {/* Step 1: SCANNING */}
+                      <div className="flex items-center justify-between">
+                        <span className={parseStep === "SCANNING" ? "animate-pulse font-bold" : ""}>
+                          {parseStep === "SCANNING" ? "[◷]" : ["EXTRACTING", "RESEARCH", "SEEDING"].includes(parseStep) || parseStep === "" ? "[✔]" : "[ ]"} STAGE 1: SCANNING FILE
+                        </span>
+                        {parseStep === "SCANNING" && <span className="text-[8px] animate-pulse">PROCESSING...</span>}
+                      </div>
+
+                      {/* Step 2: EXTRACTING */}
+                      <div className="flex items-center justify-between">
+                        <span className={parseStep === "EXTRACTING" ? "animate-pulse font-bold" : ""}>
+                          {parseStep === "EXTRACTING" ? "[◷]" : ["RESEARCH", "SEEDING"].includes(parseStep) || parseStep === "" ? "[✔]" : "[ ]"} STAGE 2: FIELDS EXTRACTION
+                        </span>
+                        {parseStep === "EXTRACTING" && <span className="text-[8px] animate-pulse">PROCESSING...</span>}
+                      </div>
+
+                      {/* Step 3: RESEARCH */}
+                      <div className="flex items-center justify-between">
+                        <span className={parseStep === "RESEARCH" ? "animate-pulse font-bold" : ""}>
+                          {parseStep === "RESEARCH" ? "[◷]" : ["SEEDING"].includes(parseStep) || parseStep === "" ? "[✔]" : "[ ]"} STAGE 3: TAVILY MARKET GROUNDING
+                        </span>
+                        {parseStep === "RESEARCH" && <span className="text-[8px] animate-pulse">PROCESSING...</span>}
+                      </div>
+
+                      {/* Step 4: SEEDING */}
+                      <div className="flex items-center justify-between">
+                        <span className={parseStep === "SEEDING" ? "animate-pulse font-bold" : ""}>
+                          {parseStep === "SEEDING" ? "[◷]" : parseStep === "" ? "[✔]" : "[ ]"} STAGE 4: PG SEEDING & PIONEER TRACE
+                        </span>
+                        {parseStep === "SEEDING" && <span className="text-[8px] animate-pulse">COMMIT...</span>}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                    <form onSubmit={handleSubmitCombined} className="p-2 flex flex-col bg-white space-y-2">
+                      <div className="relative">
+                        <textarea
+                          rows={3}
+                          value={rfqText}
+                          onChange={(e) => setRfqText(e.target.value)}
+                          placeholder="PASTE MESSY RFQ EMAIL, DRAG & DROP FILE, OR ATTACH..."
+                          className="w-full border border-[#111111] bg-white p-2 pr-8 font-mono text-[9px] text-[#111111] focus:outline-none placeholder-gray-400 leading-normal resize-none focus:bg-[#fafafa]"
+                          disabled={ingesting}
+                          style={{ minHeight: "55px" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById("rfq-file-input")?.click()}
+                          className="absolute bottom-2 right-2 p-1 hover:bg-gray-100 text-gray-500 hover:text-[#111111] transition-all m-0"
+                          title="Attach RFQ document or image"
+                          disabled={ingesting}
+                        >
+                          <Paperclip className="h-3.5 w-3.5" />
+                        </button>
+                        <input
+                          type="file"
+                          id="rfq-file-input"
+                          className="hidden"
+                          onChange={handleFileChange}
+                          accept=".docx,.pdf,.xlsx,.xls,.txt,.png,.jpg,.jpeg,.webp,.gif"
+                          disabled={ingesting}
+                        />
+                      </div>
+
+                      {selectedFile && (
+                        /* FILE PREVIEW CONTAINER */
+                        <div className="border border-[#111111] p-2 bg-[#fafafa] flex flex-col gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-1.5 bg-white border border-[#111111] flex items-center justify-center shrink-0">
+                              {(() => {
+                                const ext = selectedFile.name.split(".").pop()?.toLowerCase();
+                                if (["png", "jpg", "jpeg", "webp", "gif"].includes(ext || "")) {
+                                  return <FileImage className="h-5 w-5 text-[#111111]" />;
+                                }
+                                if (["xlsx", "xls"].includes(ext || "")) {
+                                  return <FileSpreadsheet className="h-5 w-5 text-[#111111]" />;
+                                }
+                                return <FileText className="h-5 w-5 text-[#111111]" />;
+                              })()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-mono text-[9px] font-bold text-[#111111] truncate uppercase">
+                                {selectedFile.name}
+                              </div>
+                              <div className="font-mono text-[7px] text-gray-400 uppercase mt-0.5">
+                                {(selectedFile.size / 1024).toFixed(1)} KB
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedFile(null)}
+                              className="p-1 hover:bg-gray-200 border border-[#111111] bg-white transition-all text-[#111111]"
+                              title="Remove selected file"
+                              disabled={ingesting}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={ingesting || (!selectedFile && !rfqText.trim())}
+                        className="w-full bg-[#111111] text-white font-mono text-[9px] font-bold uppercase py-1.5 hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-1.5 border border-[#111111] transition-all duration-100"
+                      >
+                        <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                        <span>{selectedFile ? "INGEST ATTACHED FILE" : "INGEST & SEED POSTGRES"}</span>
+                      </button>
+                    </form>
+                    </>
+                  )}
             </div>
 
             {loading ? (
@@ -556,102 +845,117 @@ export default function Home() {
             ) : (
               <div className="flex-1 flex flex-col min-h-0 border border-[#111111] bg-white">
                 
-                {/* BUYER DRAWER */}
-                <div className={`flex flex-col min-h-0 ${activeDrawer === "BUYER" ? "flex-1" : ""}`}>
+                {/* SIDEBAR NAVIGATION MENU */}
+                <div className="flex border-b border-[#111111] shrink-0">
                   <button
                     type="button"
-                    onClick={() => setActiveDrawer(activeDrawer === "BUYER" ? null : "BUYER")}
-                    className={`w-full flex justify-between items-center px-3 py-2.5 font-mono text-[10px] font-bold uppercase tracking-wider transition-all duration-100 border-b border-[#111111] text-left ${
+                    onClick={() => setActiveDrawer("BUYER")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-center transition-all duration-100 cursor-pointer border-r border-[#111111] ${
                       activeDrawer === "BUYER"
                         ? "bg-[#111111] text-white"
-                        : "bg-[#fafafa] text-gray-500 hover:text-[#111111]"
+                        : "bg-[#fafafa] text-gray-500 hover:bg-[#fafafa] hover:text-[#111111]"
                     }`}
                   >
-                    <span className="flex items-center gap-2">
-                      <span className={activeDrawer === "BUYER" ? "text-white" : "text-gray-400"}>
-                        {activeDrawer === "BUYER" ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                      </span>
-                      <ShoppingBag className={`h-3.5 w-3.5 shrink-0 ${activeDrawer === "BUYER" ? "text-white" : "text-gray-500"}`} />
-                      <span>BUYER CHANNELS (WE BUY)</span>
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className={activeDrawer === "BUYER" ? "text-gray-300" : "text-gray-400"}>({buyerDeals.length})</span>
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNewPerspective("BUYER");
-                          setShowLotForm(true);
-                        }}
-                        className={`font-mono text-[11px] font-bold px-1 hover:opacity-80 cursor-pointer ${
-                          activeDrawer === "BUYER" ? "text-white" : "text-[#111111]"
-                        }`}
-                        title="Add Buyer Channel"
-                      >
-                        [+]
-                      </span>
-                    </div>
+                    <ShoppingBag className="h-3 w-3" />
+                    <span>BUYER ({buyerDeals.length})</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveDrawer("SELLER")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-center transition-all duration-100 cursor-pointer ${
+                      activeDrawer === "SELLER"
+                        ? "bg-[#111111] text-white"
+                        : "bg-[#fafafa] text-gray-500 hover:bg-[#fafafa] hover:text-[#111111]"
+                    }`}
+                  >
+                    <Tag className="h-3 w-3" />
+                    <span>SELLER ({sellerDeals.length})</span>
+                  </button>
+                </div>
 
-                  {activeDrawer === "BUYER" && (
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1.5 bg-[#fafafa]">
-                      {buyerDeals.length === 0 ? (
+                <div className="flex-1 flex flex-col min-h-0">
+                  {/* Action/Sub-header Bar */}
+                  <div className="w-full flex justify-between items-center px-3 py-1.5 bg-[#fafafa] border-b border-[#111111] text-[#111111] font-mono text-[8px] font-bold uppercase tracking-wider">
+                    <span className="text-gray-500 font-mono text-[8px]">
+                      {activeDrawer === "BUYER" ? "ACTIVE BUY CHANNELS" : "ACTIVE SELL CHANNELS"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewPerspective(activeDrawer === "BUYER" ? "BUYER" : "SELLER");
+                        setShowLotForm(true);
+                      }}
+                      className="font-mono text-[8px] font-bold hover:underline cursor-pointer text-[#111111] uppercase"
+                    >
+                      [+] Create Channel
+                    </button>
+                  </div>
+
+                  {/* Scrollable list */}
+                  <div className="flex-1 overflow-y-auto p-2 space-y-1.5 bg-[#fafafa]">
+                    {showLotForm && newPerspective === activeDrawer && (
+                      <form onSubmit={handleCreateLot} className="border border-[#111111] p-3 bg-white space-y-3 shrink-0 mb-2 animate-fade-in">
+                        <div className="font-mono text-[10px] font-bold border-b border-[#111111] pb-1 uppercase flex justify-between items-center">
+                          <span>INITIALIZE {newPerspective} LOT</span>
+                          <button type="button" onClick={() => setShowLotForm(false)} className="hover:opacity-70">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <div>
+                          <label className="font-mono text-[8px] font-bold text-gray-500 block mb-1 uppercase">
+                            ASSET LOT DESCRIPTOR / ITEM NAME
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="E.G. TITANIUM ROTOR ASSEMBLY"
+                            value={newLotName}
+                            onChange={(e) => setNewLotName(e.target.value)}
+                            className="w-full border border-[#111111] bg-white px-2 py-1.5 font-mono text-[10px] focus:outline-none focus:bg-[#fafafa]"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-mono text-[8px] font-bold text-gray-500 block mb-1 uppercase">
+                            TARGET POOL BUDGET (EUR)
+                          </label>
+                          <input
+                            type="number"
+                            required
+                            min={500}
+                            max={5000}
+                            value={newBudget}
+                            onChange={(e) => setNewBudget(parseInt(e.target.value))}
+                            className="w-full border border-[#111111] bg-white px-2 py-1.5 font-mono text-[10px] focus:outline-none focus:bg-[#fafafa]"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={submitting}
+                          className="w-full bg-[#111111] text-white font-mono text-[9px] font-bold uppercase py-1.5 hover:bg-gray-800 disabled:opacity-50"
+                        >
+                          {submitting ? "RUNNING TAVILY RESEARCH..." : "SPAWN ESCROW ROOM"}
+                        </button>
+                      </form>
+                    )}
+
+                    {activeDrawer === "BUYER" ? (
+                      buyerDeals.length === 0 ? (
                         <div className="p-4 text-center font-mono text-[9px] text-gray-400 italic">
                           NO ACTIVE BUYER CHANNELS
                         </div>
                       ) : (
                         buyerDeals.map((d) => renderDealChannel(d))
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* SELLER DRAWER */}
-                <div className={`flex flex-col min-h-0 border-t border-[#111111] ${activeDrawer === "SELLER" ? "flex-1" : ""}`}>
-                  <button
-                    type="button"
-                    onClick={() => setActiveDrawer(activeDrawer === "SELLER" ? null : "SELLER")}
-                    className={`w-full flex justify-between items-center px-3 py-2.5 font-mono text-[10px] font-bold uppercase tracking-wider transition-all duration-100 text-left ${
-                      activeDrawer === "SELLER"
-                        ? "bg-[#111111] text-white"
-                        : "bg-[#fafafa] text-gray-500 hover:text-[#111111]"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span className={activeDrawer === "SELLER" ? "text-white" : "text-gray-400"}>
-                        {activeDrawer === "SELLER" ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                      </span>
-                      <Tag className={`h-3.5 w-3.5 shrink-0 ${activeDrawer === "SELLER" ? "text-white" : "text-gray-500"}`} />
-                      <span>SELLER CHANNELS (WE SELL)</span>
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className={activeDrawer === "SELLER" ? "text-gray-300" : "text-gray-400"}>({sellerDeals.length})</span>
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNewPerspective("SELLER");
-                          setShowLotForm(true);
-                        }}
-                        className={`font-mono text-[11px] font-bold px-1 hover:opacity-80 cursor-pointer ${
-                          activeDrawer === "SELLER" ? "text-white" : "text-[#111111]"
-                        }`}
-                        title="Add Seller Channel"
-                      >
-                        [+]
-                      </span>
-                    </div>
-                  </button>
-
-                  {activeDrawer === "SELLER" && (
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1.5 bg-[#fafafa] border-t border-[#111111]">
-                      {sellerDeals.length === 0 ? (
+                      )
+                    ) : (
+                      sellerDeals.length === 0 ? (
                         <div className="p-4 text-center font-mono text-[9px] text-gray-400 italic">
                           NO ACTIVE SELLER CHANNELS
                         </div>
                       ) : (
                         sellerDeals.map((d) => renderDealChannel(d))
-                      )}
-                    </div>
-                  )}
+                      )
+                    )}
+                  </div>
                 </div>
 
               </div>
@@ -792,7 +1096,7 @@ export default function Home() {
                           
                           {/* BODY CONTENT */}
                           <p className="text-xs font-mono leading-relaxed whitespace-pre-wrap">
-                            {m.message_text}
+                            {renderFormattedText(m.message_text)}
                           </p>
                         </div>
 
@@ -1082,6 +1386,182 @@ export default function Home() {
             <div className="h-10 bg-[#fafafa] border-t border-[#111111] px-4 flex items-center justify-between shrink-0 font-mono text-[9px] text-gray-500 uppercase font-bold">
               <span>SECURITY AUTH: LEVEL 4 ROOT ESCROW OPERATOR</span>
               <span>ATIRA PROCUREMENT CONTRACT INDEX PROTOCOL v1.0</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULL SCREEN MULTIMODAL INGESTION TERMINAL OVERLAY MODAL */}
+      {isIngestionFullView && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6 animate-fade-in backdrop-blur-sm">
+          <div className="w-full max-w-5xl h-[85vh] bg-white border-2 border-[#111111] flex flex-col shadow-[8px_8px_0px_rgba(17,17,17,1)] overflow-hidden">
+            {/* Modal Header */}
+            <div className="h-14 bg-[#111111] text-white px-4 flex items-center justify-between font-mono text-xs font-bold uppercase tracking-wider shrink-0 border-b border-[#111111]">
+              <div className="flex items-center gap-2">
+                <Terminal className="h-4.5 w-4.5 text-white animate-pulse" />
+                <span>MULTIMODAL INGESTION TERMINAL (FULL VIEW)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsIngestionFullView(false)}
+                className="border border-white px-3 py-1.5 bg-white text-[#111111] hover:bg-gray-100 transition-all flex items-center gap-1.5 text-[10px] font-bold cursor-pointer"
+                title="Collapse to sidebar"
+              >
+                <Minimize2 className="h-3.5 w-3.5" />
+                <span>COLLAPSE VIEW [ESC]</span>
+              </button>
+            </div>
+            
+            {/* Modal Body */}
+            {ingesting ? (
+              /* PROGRESS SCANNER CONSOLE (MAXIMIZED VIEW) */
+              <div className="flex-1 bg-black text-[#00ff00] p-10 font-mono text-xs leading-relaxed flex flex-col justify-center overflow-y-auto">
+                <div className="max-w-2xl mx-auto w-full space-y-6 p-8 border border-[#00ff00]/30 bg-black shadow-[0_0_30px_rgba(0,255,0,0.07)]">
+                  <div className="flex items-center gap-3 text-sm font-bold border-b border-[#00ff00]/30 pb-4 mb-4">
+                    <span className="animate-ping h-2.5 w-2.5 bg-[#00ff00] rounded-none shrink-0"></span>
+                    <span>INGESTION PROTOCOL INITIATED — RUNNING AUTOMATED EXTRACTION...</span>
+                  </div>
+                  
+                  {/* Step 1: SCANNING */}
+                  <div className="flex items-center justify-between p-2.5 border border-transparent hover:border-[#00ff00]/20 transition-all">
+                    <span className={parseStep === "SCANNING" ? "animate-pulse font-bold text-sm" : ""}>
+                      {parseStep === "SCANNING" ? "[◷]" : ["EXTRACTING", "RESEARCH", "SEEDING"].includes(parseStep) || parseStep === "" ? "[✔]" : "[ ]"} STAGE 1: SCANNING FILE METADATA & INTEGRITY
+                    </span>
+                    {parseStep === "SCANNING" && <span className="text-[10px] animate-pulse font-bold">PROCESSING...</span>}
+                  </div>
+
+                  {/* Step 2: EXTRACTING */}
+                  <div className="flex items-center justify-between p-2.5 border border-transparent hover:border-[#00ff00]/20 transition-all">
+                    <span className={parseStep === "EXTRACTING" ? "animate-pulse font-bold text-sm" : ""}>
+                      {parseStep === "EXTRACTING" ? "[◷]" : ["RESEARCH", "SEEDING"].includes(parseStep) || parseStep === "" ? "[✔]" : "[ ]"} STAGE 2: FIELDS EXTRACTION (FAL.AI BAGEL VISION VLM)
+                    </span>
+                    {parseStep === "EXTRACTING" && <span className="text-[10px] animate-pulse font-bold">PROCESSING...</span>}
+                  </div>
+
+                  {/* Step 3: RESEARCH */}
+                  <div className="flex items-center justify-between p-2.5 border border-transparent hover:border-[#00ff00]/20 transition-all">
+                    <span className={parseStep === "RESEARCH" ? "animate-pulse font-bold text-sm" : ""}>
+                      {parseStep === "RESEARCH" ? "[◷]" : ["SEEDING"].includes(parseStep) || parseStep === "" ? "[✔]" : "[ ]"} STAGE 3: TAVILY MARKET GROUNDING & SPEC BENCHMARKS
+                    </span>
+                    {parseStep === "RESEARCH" && <span className="text-[10px] animate-pulse font-bold">PROCESSING...</span>}
+                  </div>
+
+                  {/* Step 4: SEEDING */}
+                  <div className="flex items-center justify-between p-2.5 border border-transparent hover:border-[#00ff00]/20 transition-all">
+                    <span className={parseStep === "SEEDING" ? "animate-pulse font-bold text-sm" : ""}>
+                      {parseStep === "SEEDING" ? "[◷]" : parseStep === "" ? "[✔]" : "[ ]"} STAGE 4: PG SEEDING & FASTINO PIONEER OBSERVABILITY TRACE
+                    </span>
+                    {parseStep === "SEEDING" && <span className="text-[10px] animate-pulse font-bold text-[#00ff00]">COMMIT...</span>}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* INPUT AND DRAG-DROP WORKSPACE (MAXIMIZED VIEW) */
+              <form onSubmit={handleSubmitCombined} className="flex-1 flex flex-col min-h-0 bg-white">
+                <div className="flex-1 flex p-6 gap-6 min-h-0">
+                  {/* Left Column: Spacious Monospace Textarea */}
+                  <div className="flex-1 flex flex-col gap-2 min-h-0">
+                    <label className="font-mono text-[10px] font-bold text-gray-500 uppercase shrink-0">
+                      PASTE MESSY RFQ EMAIL OR UNSTRUCTURED TEXT COPIES:
+                    </label>
+                    <textarea
+                      value={rfqText}
+                      onChange={(e) => setRfqText(e.target.value)}
+                      placeholder="PASTE MESSY EMAIL CHAINS, PROCUREMENT PDF SPECIFICATIONS, REQ SHEETS OR DRAG FILES OVER..."
+                      className="w-full flex-1 border border-[#111111] bg-white p-4 font-mono text-xs text-[#111111] focus:outline-none placeholder-gray-400 leading-relaxed resize-none focus:bg-[#fafafa]"
+                      disabled={ingesting}
+                    />
+                  </div>
+                  
+                  {/* Right Column: High-Fidelity Drag and Drop + Action Panel */}
+                  <div className="w-96 flex flex-col gap-4 border-l border-gray-200 pl-6 shrink-0 min-h-0 justify-between">
+                    <div className="flex-1 flex flex-col gap-4 min-h-0 overflow-y-auto">
+                      <div className="flex flex-col gap-2 shrink-0">
+                        <label className="font-mono text-[10px] font-bold text-gray-500 uppercase">
+                          ATTACH DOCUMENTS OR IMAGES:
+                        </label>
+                        <div 
+                          onClick={() => document.getElementById("rfq-file-input-full")?.click()}
+                          className="border-2 border-dashed border-gray-300 hover:border-[#111111] bg-[#fafafa] hover:bg-[#f3f3f3] transition-all duration-150 p-6 flex flex-col items-center justify-center text-center cursor-pointer min-h-[160px] shrink-0"
+                        >
+                          <Paperclip className="h-6 w-6 text-gray-400 mb-2 animate-pulse" />
+                          <span className="font-mono text-[10px] font-bold text-[#111111] uppercase">
+                            DRAG & DROP FILE OR CLICK TO BROWSE
+                          </span>
+                          <span className="font-mono text-[8px] text-gray-400 uppercase mt-1 leading-normal">
+                            SUPPORTS PDF, DOCX, XLSX, TXT, PNG, JPG, JPEG, WEBP
+                          </span>
+                        </div>
+                        <input
+                          type="file"
+                          id="rfq-file-input-full"
+                          className="hidden"
+                          onChange={handleFileChange}
+                          accept=".docx,.pdf,.xlsx,.xls,.txt,.png,.jpg,.jpeg,.webp,.gif"
+                          disabled={ingesting}
+                        />
+                      </div>
+                      
+                      {selectedFile && (
+                        /* FILE PREVIEW COMPONENT */
+                        <div className="border border-[#111111] p-3 bg-white flex flex-col gap-2 shadow-[4px_4px_0px_rgba(17,17,17,1)] shrink-0">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-[#fafafa] border border-[#111111] flex items-center justify-center shrink-0">
+                              {(() => {
+                                const ext = selectedFile.name.split(".").pop()?.toLowerCase();
+                                if (["png", "jpg", "jpeg", "webp", "gif"].includes(ext || "")) {
+                                  return <FileImage className="h-6 w-6 text-[#111111]" />;
+                                }
+                                if (["xlsx", "xls"].includes(ext || "")) {
+                                  return <FileSpreadsheet className="h-6 w-6 text-[#111111]" />;
+                                }
+                                return <FileText className="h-6 w-6 text-[#111111]" />;
+                              })()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-mono text-[10px] font-bold text-[#111111] truncate uppercase">
+                                {selectedFile.name}
+                              </div>
+                              <div className="font-mono text-[8px] text-gray-400 uppercase mt-0.5">
+                                {(selectedFile.size / 1024).toFixed(1)} KB
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedFile(null);
+                              }}
+                              className="p-1 text-gray-400 hover:text-red-500 font-mono text-xs font-bold transition-all hover:bg-gray-50 border border-transparent hover:border-gray-200 cursor-pointer"
+                              title="Remove attached file"
+                            >
+                              [X]
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Primary Trigger Ingest */}
+                    <div className="shrink-0 pt-4 border-t border-gray-100">
+                      <button
+                        type="submit"
+                        disabled={ingesting || (!rfqText.trim() && !selectedFile)}
+                        className="w-full bg-[#111111] text-white font-mono text-xs font-bold uppercase py-3.5 hover:bg-gray-800 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-[4px_4px_0px_rgba(0,0,0,0.15)] cursor-pointer"
+                      >
+                        <Terminal className="h-4 w-4 text-white shrink-0 animate-pulse" />
+                        <span>INGEST & SEED POSTGRES ROOM</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            )}
+            
+            {/* Modal Footer */}
+            <div className="h-10 bg-[#fafafa] border-t border-[#111111] px-4 flex items-center justify-between shrink-0 font-mono text-[9px] text-gray-500 uppercase font-bold">
+              <span>SECURITY AUTH: LEVEL 4 ROOT ESCROW OPERATOR</span>
+              <span>ATIRA MULTIMODAL INBOUND PARSER PIPELINE v1.0</span>
             </div>
           </div>
         </div>

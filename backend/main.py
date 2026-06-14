@@ -3,13 +3,24 @@ import uuid
 from typing import Optional
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from .database import engine, Base, get_db
 from .models import Deal, Participant, Message
-from .agents import run_market_intelligence, generate_agent_turn, ingest_unstructured_rfq_to_specifications, search_market_valuation_benchmarks, ingest_unstructured_rfq_with_fastino, log_trace_to_fastino_pioneer
+from .agents import (
+    run_market_intelligence,
+    generate_agent_turn,
+    ingest_unstructured_rfq_to_specifications,
+    search_market_valuation_benchmarks,
+    ingest_unstructured_rfq_with_fastino,
+    log_trace_to_fastino_pioneer,
+    extract_text_from_file_bytes,
+    extract_rfq_from_image_via_fal,
+    ingest_image_rfq_via_fal_bagel
+)
+
 
 # SQLAlchemy automatic table migration on startup
 @asynccontextmanager
@@ -232,12 +243,148 @@ def create_deal(payload: DealCreateRequest, db: Session = Depends(get_db)):
 @app.post("/api/deals/ingest")
 def ingest_deal(payload: DealIngestRequest, db: Session = Depends(get_db)):
     """
-    Ingests an unstructured raw text RFQ layout or email, routes it through Fastino's task-optimized parsing,
+    Ingests an unstructured raw text RFQ layout or email, routes it through Fastino's task-optimized parsing
+    or image VLM (fal-ai/bagel/understand) if an image URL is detected,
     searches live marketplace price references using Tavily, creates a new active Buyer-perspective Deal,
     seeds both participants, triggers Pioneer trace logging, and commits the records to PostgreSQL.
     """
-    # 1. Run unstructured RFQ parsing using Fastino's task-optimized model simulated route
-    ingest_data = ingest_unstructured_rfq_with_fastino(payload.raw_text)
+    raw_text = payload.raw_text.strip()
+    is_image = False
+    if raw_text.startswith("http://") or raw_text.startswith("https://"):
+        lower_url = raw_text.lower()
+        if any(lower_url.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif"]):
+            is_image = True
+
+    if is_image:
+        print(f"[TRACK 2] Image URL detected. Routing to Fal.ai Bagel VLM: {raw_text}")
+        ingest_data = ingest_image_rfq_via_fal_bagel(raw_text)
+    else:
+        print("[TRACK 2] Pure text detected. Routing to Fastino unstructured parser.")
+        ingest_data = ingest_unstructured_rfq_with_fastino(raw_text)
+
+    item_name = ingest_data["item_name"]
+    budget_cap = ingest_data["recommended_budget_cap"]
+    extracted_specs = ingest_data["extracted_specs"]
+    
+    # 2. Run market research grounding using Tavily + Gemini formatting
+    market_report = search_market_valuation_benchmarks(item_name)
+    
+    # 3. Combine extracted specifications and market reports
+    header_prefix = f"EXTRACTED VIA {'FAL-AI BAGEL UNDERSTAND' if is_image else 'FASTINO'}"
+    combined_specs = (
+        f"# TECHNICAL HARDWARE SPECIFICATIONS ({header_prefix}):\n\n"
+        f"{extracted_specs}\n\n"
+        f"==================================================\n\n"
+        f"{market_report}"
+    )
+    
+    # 4. Spawn a new Deal row
+    deal_id = uuid.uuid4()
+    new_deal = Deal(
+        id=deal_id,
+        item_name=item_name,
+        status="ACTIVE",
+        current_buyer_budget=budget_cap,
+        technical_specs=combined_specs,
+        perspective="BUYER"
+    )
+    db.add(new_deal)
+    
+    # 5. Provision isolated Participant records (Buyer Agent and Seller Agent)
+    participants_seed = [
+        Participant(
+            id=uuid.uuid4(),
+            deal_id=deal_id,
+            name="Buyer Agent",
+            role="BUYER",
+            current_price_point=int(budget_cap * 0.7),  # starting bid
+            hidden_floor_ceil=budget_cap
+        ),
+        Participant(
+            id=uuid.uuid4(),
+            deal_id=deal_id,
+            name="Seller Agent",
+            role="SELLER",
+            current_price_point=int(budget_cap * 1.15),  # starting ask
+            hidden_floor_ceil=int(budget_cap * 0.85)  # floor limit
+        )
+    ]
+    
+    for p in participants_seed:
+        db.add(p)
+        
+    # 6. Append initial Message timeline traces using professional pipes (|) system formatting
+    announcements = [
+        Message(
+            id=uuid.uuid4(),
+            deal_id=deal_id,
+            sender_name="System Settlement",
+            role="SYSTEM",
+            message_text=f"SYSTEM | MULTIMODAL RFQ INGESTION COMPLETE | LOT: '{item_name.upper()}' | PARSER: {'FAL-AI BAGEL UNDERSTAND' if is_image else 'FASTINO-POWERED'}"
+        ),
+        Message(
+            id=uuid.uuid4(),
+            deal_id=deal_id,
+            sender_name="System Settlement",
+            role="SYSTEM",
+            message_text=f"SYSTEM | TAVILY GROUNDING INTEGRATED | SPECIFICATIONS AND BENCHMARKS:\n{combined_specs}"
+        ),
+        Message(
+            id=uuid.uuid4(),
+            deal_id=deal_id,
+            sender_name="System Settlement",
+            role="SYSTEM",
+            message_text="SYSTEM | ORCHESTRATION ACTIVE | BUYER-PERSPECTIVE EXCHANGE ARMED (Counter-Offers trigger Seller Agent turns)."
+        )
+    ]
+    
+    for msg in announcements:
+        db.add(msg)
+        
+    db.commit()
+    
+    # 7. Pioneer Observability Log Trace
+    transcript_mock = [{"sender": a.sender_name, "role": a.role, "text": a.message_text} for a in announcements]
+    log_trace_to_fastino_pioneer(deal_id=str(deal_id), transcript=transcript_mock)
+    
+    return {"status": "SUCCESS", "deal_id": str(deal_id)}
+
+@app.post("/api/deals/ingest-file")
+async def ingest_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """
+    Accepts multipart document or image upload. Parses text locally for office/pdf docs,
+    or executes image OCR/parsing via fal.ai VLM. Then runs Tavily research,
+    seeds participants, logs system messages and Pioneer traces, and commits to Postgres.
+    """
+    import base64
+    filename = file.filename
+    content_type = file.content_type
+    file_bytes = await file.read()
+    
+    # 1. Determine parsing strategy based on file extension / content type
+    ext = filename.split(".")[-1].lower() if "." in filename else ""
+    is_image = ext in ["png", "jpg", "jpeg", "webp", "gif"] or (content_type and content_type.startswith("image/"))
+    
+    if is_image:
+        # Convert file bytes to base64 data URI to pass to fal.ai VLM
+        mime = content_type or f"image/{ext}" if ext else "image/png"
+        b64_str = base64.b64encode(file_bytes).decode("utf-8")
+        data_uri = f"data:{mime};base64,{b64_str}"
+        
+        # Invoke fal.ai vision model
+        ingest_data = extract_rfq_from_image_via_fal(data_uri)
+    else:
+        # Document formats: PDF, DOCX, XLSX, TXT
+        try:
+            raw_text = extract_text_from_file_bytes(file_bytes, filename)
+            # Use task-optimized Fastino model route to extract details
+            ingest_data = ingest_unstructured_rfq_with_fastino(raw_text)
+        except Exception as err:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to parse document: {str(err)}"
+            )
+            
     item_name = ingest_data["item_name"]
     budget_cap = ingest_data["recommended_budget_cap"]
     extracted_specs = ingest_data["extracted_specs"]
@@ -247,7 +394,7 @@ def ingest_deal(payload: DealIngestRequest, db: Session = Depends(get_db)):
     
     # 3. Combine extracted specifications and market reports
     combined_specs = (
-        f"# TECHNICAL HARDWARE SPECIFICATIONS (EXTRACTED RFQ):\n\n"
+        f"# TECHNICAL HARDWARE SPECIFICATIONS (EXTRACTED FROM {filename.upper()}):\n\n"
         f"{extracted_specs}\n\n"
         f"==================================================\n\n"
         f"{market_report}"
@@ -288,21 +435,25 @@ def ingest_deal(payload: DealIngestRequest, db: Session = Depends(get_db)):
     for p in participants_seed:
         db.add(p)
         
-    # 6. Append initial Message timeline traces
+    # 6. Append initial Message timeline traces with upload metadata
     announcements = [
         Message(
             id=uuid.uuid4(),
             deal_id=deal_id,
             sender_name="System Settlement",
             role="SYSTEM",
-            message_text=f"UNSTRUCTURED RFQ INGESTION COMPLETE FOR LOT '{item_name.upper()}' (FASTINO-POWERED)."
+            message_text=(
+                f"DOCUMENT INGESTION PROTOCOL INITIATED FOR ASSET FILE: '{filename.upper()}'.\n"
+                f"PARSING TECHNIQUE: {'FAL.AI VLM OCR' if is_image else 'LOCAL EXTRACTION + FASTINO PARSING'}.\n"
+                f"IDENTIFIED LOT DESCRIPTOR: '{item_name.upper()}'."
+            )
         ),
         Message(
             id=uuid.uuid4(),
             deal_id=deal_id,
             sender_name="System Settlement",
             role="SYSTEM",
-            message_text=f"TAVILY CONTEXT INJECTED:\n{combined_specs}"
+            message_text=f"TAVILY & GROUNDED SPECIFICATIONS REPORT:\n{combined_specs}"
         ),
         Message(
             id=uuid.uuid4(),
@@ -323,6 +474,7 @@ def ingest_deal(payload: DealIngestRequest, db: Session = Depends(get_db)):
     log_trace_to_fastino_pioneer(deal_id=str(deal_id), transcript=transcript_mock)
     
     return {"status": "SUCCESS", "deal_id": str(deal_id)}
+
 
 @app.post("/api/negotiate/step")
 def negotiate_step(payload: NegotiateStepRequest, db: Session = Depends(get_db)):
