@@ -81,14 +81,14 @@ export default function ObservabilityPage() {
 
   if (!isMounted) {
     return (
-      <div className="h-screen w-screen bg-[#fafafa] flex items-center justify-center font-mono text-xs uppercase text-[#111111]">
+      <div className="h-screen w-screen bg-white flex items-center justify-center font-mono text-xs uppercase text-[#111111]">
         <span>Loading Atira Observability...</span>
       </div>
     );
   }
 
   return (
-    <main className="h-screen w-screen bg-[#fafafa] text-[#111111] flex flex-col overflow-hidden font-sans">
+    <main className="h-screen w-screen bg-white text-[#111111] flex flex-col overflow-hidden font-sans">
       
       {/* HEADER SECTION */}
       <header className="h-14 border-b border-[#111111] bg-white px-4 flex items-center justify-between shrink-0">
@@ -132,7 +132,7 @@ export default function ObservabilityPage() {
 
 
       {/* MAIN DATA-HEAVY MONITORING SYSTEM GRID */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 grid grid-cols-1 xl:grid-cols-3 gap-4 bg-[#fafafa]">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 grid grid-cols-1 xl:grid-cols-3 gap-4 bg-white">
         
         {/* PANEL A: PIONEER EVENT CLUSTERING LOGS */}
         <div className="border border-[#111111] bg-white flex flex-col min-h-0 shadow-[4px_4px_0px_rgba(17,17,17,0.1)]">
@@ -257,22 +257,22 @@ export default function ObservabilityPage() {
 
           <div className="p-3 flex-1 overflow-y-auto min-h-0 flex flex-col justify-between space-y-3">
             <div className="grid grid-cols-2 gap-2">
-              <div className="border border-gray-300 p-2 bg-[#fafafa] font-mono text-[8px]">
+              <div className="border border-gray-300 p-2 bg-white font-mono text-[8px]">
                 <div className="text-gray-400 uppercase font-bold">FASTINO INF. LATENCY</div>
                 <div className="text-xs font-bold text-emerald-600 mt-1">12.4 ms</div>
                 <div className="text-[7px] text-gray-500 uppercase mt-0.5 font-bold">(-95.58% OPTIMIZATION)</div>
               </div>
-              <div className="border border-gray-300 p-2 bg-[#fafafa] font-mono text-[8px]">
+              <div className="border border-gray-300 p-2 bg-white font-mono text-[8px]">
                 <div className="text-gray-400 uppercase font-bold">TUNING ACCURACY</div>
                 <div className="text-xs font-bold text-blue-600 mt-1">99.42%</div>
                 <div className="text-[7px] text-gray-500 uppercase mt-0.5 font-bold">(ATIRA-STANDARD COMPLIANCE)</div>
               </div>
-              <div className="border border-gray-300 p-2 bg-[#fafafa] font-mono text-[8px]">
+              <div className="border border-gray-300 p-2 bg-white font-mono text-[8px]">
                 <div className="text-gray-400 uppercase font-bold">ACTIVE ADAPTERS</div>
                 <div className="text-[9px] font-bold text-gray-800 mt-1 truncate">SLM-NEGOTIATION-V2</div>
                 <div className="text-[7px] text-gray-500 uppercase mt-0.5 font-bold">LORA RANK = 8, ALPHA = 32</div>
               </div>
-              <div className="border border-gray-300 p-2 bg-[#fafafa] font-mono text-[8px]">
+              <div className="border border-gray-300 p-2 bg-white font-mono text-[8px]">
                 <div className="text-gray-400 uppercase font-bold">PIONEER HEURISTICS</div>
                 <div className="text-xs font-bold text-gray-800 mt-1 font-bold">NOMINAL (99.8%)</div>
                 <div className="text-[7px] text-gray-500 uppercase mt-0.5 font-bold">HEALTHY TRAFFIC ROUTING</div>

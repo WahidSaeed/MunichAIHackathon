@@ -425,14 +425,14 @@ export default function DashboardPage() {
 
   if (!isMounted) {
     return (
-      <div className="h-screen w-screen bg-[#fafafa] flex items-center justify-center font-mono text-xs uppercase text-[#111111]">
+      <div className="h-screen w-screen bg-white flex items-center justify-center font-mono text-xs uppercase text-[#111111]">
         <span>Loading Dynamic Analytics...</span>
       </div>
     );
   }
 
   return (
-    <main className="h-screen w-screen bg-[#fafafa] text-[#111111] flex flex-col overflow-hidden font-sans select-none antialiased">
+    <main className="h-screen w-screen bg-white text-[#111111] flex flex-col overflow-hidden font-sans select-none antialiased">
       
       {/* GLOBAL SVG PATTERNS & TEXTURES DEFINITIONS */}
       <svg className="absolute w-0 h-0" width="0" height="0">
@@ -477,7 +477,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="hidden lg:flex items-center gap-1.5 font-mono text-[9px] text-[#111111] uppercase border border-[#111111] bg-[#fafafa] px-2.5 py-1">
+          <div className="hidden lg:flex items-center gap-1.5 font-mono text-[9px] text-[#111111] uppercase border border-[#111111] bg-white px-2.5 py-1">
             <span className="h-1.5 w-1.5 bg-gray-800 rounded-none animate-pulse"></span>
             <span>DATA LEDGER FEED: ACTIVE</span>
           </div>
@@ -485,7 +485,7 @@ export default function DashboardPage() {
           <button
             onClick={() => fetchDealsData(true)}
             disabled={refreshing}
-            className={`font-mono text-[9.5px] border border-[#111111] bg-white px-3 py-1.5 hover:bg-[#fafafa] transition-all flex items-center gap-1.5 text-[#111111] shadow-[1px_1px_0px_rgba(17,17,17,1)] active:translate-y-0.5 cursor-pointer ${refreshing ? "opacity-50" : ""}`}
+            className={`font-mono text-[9.5px] border border-[#111111] bg-white px-3 py-1.5 hover:bg-white transition-all flex items-center gap-1.5 text-[#111111] shadow-[1px_1px_0px_rgba(17,17,17,1)] active:translate-y-0.5 cursor-pointer ${refreshing ? "opacity-50" : ""}`}
             title="Refresh dashboard stats"
           >
             <RefreshCw className={`h-3 w-3 text-[#111111] ${refreshing ? "animate-spin" : ""}`} />
@@ -503,7 +503,7 @@ export default function DashboardPage() {
       </header>
 
       {/* THREE-PANEL DYNAMIC STATS CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 p-4 shrink-0 bg-[#fafafa] border-b border-[#111111]">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 p-4 shrink-0 bg-white border-b border-[#111111]">
         
         <div className="border border-[#111111] bg-white p-3 relative overflow-hidden group hover:shadow-[4px_4px_0px_rgba(17,17,17,1)] shadow-[2px_2px_0px_rgba(17,17,17,1)] transition-all">
           <div className="absolute right-2 bottom-1 text-gray-100 group-hover:text-gray-400/10 transition-colors pointer-events-none">
@@ -579,14 +579,14 @@ export default function DashboardPage() {
       </div>
 
       {/* MAIN LAYOUT SCROLLABLE GRIDS */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 bg-[#fafafa]">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 bg-white">
         
         {/* UPPER GRAPH GRID: DONUT, PIE, STRATEGY BARS */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           
           {/* GRAPH A: DONUT Escrow settlement status */}
           <div className="border border-[#111111] bg-white flex flex-col min-h-0 shadow-[4px_4px_0px_rgba(17,17,17,1)] relative overflow-hidden group">
-            <div className="bg-[#fafafa] border-b border-[#111111] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#111111] flex items-center justify-between">
+            <div className="bg-white border-b border-[#111111] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#111111] flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Lock className="h-3.5 w-3.5 text-[#111111]" />
                 ESCROW CAPITAL SETTLEMENT FLOW
@@ -676,7 +676,7 @@ export default function DashboardPage() {
 
           {/* GRAPH B: SHOULD-COST PIE CHART (Selected Deal-specific metrics) */}
           <div className="border border-[#111111] bg-white flex flex-col min-h-0 shadow-[4px_4px_0px_rgba(17,17,17,1)] relative overflow-hidden group">
-            <div className="bg-[#fafafa] border-b border-[#111111] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#111111] flex items-center justify-between">
+            <div className="bg-white border-b border-[#111111] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#111111] flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Lock className="h-3.5 w-3.5 text-[#111111]" />
                 SHOULD-COST ALLOCATION PORTFOLIO
@@ -753,7 +753,7 @@ export default function DashboardPage() {
 
           {/* GRAPH C: STRATEGIC Sourcing Strategy Bars */}
           <div className="border border-[#111111] bg-white flex flex-col min-h-0 shadow-[4px_4px_0px_rgba(17,17,17,1)] relative overflow-hidden group">
-            <div className="bg-[#fafafa] border-b border-[#111111] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#111111] flex items-center justify-between">
+            <div className="bg-white border-b border-[#111111] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#111111] flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Sliders className="h-3.5 w-3.5 text-[#111111]" />
                 SOURCING STRATEGIC ALLOCATIONS
@@ -836,7 +836,7 @@ export default function DashboardPage() {
           
           {/* GRAPH D: CONVERGENCE LINE CHART */}
           <div className="border border-[#111111] bg-white flex flex-col min-h-0 shadow-[4px_4px_0px_rgba(17,17,17,1)] relative overflow-hidden group">
-            <div className="bg-[#fafafa] border-b border-[#111111] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#111111] flex items-center justify-between">
+            <div className="bg-white border-b border-[#111111] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#111111] flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <TrendingUp className="h-3.5 w-3.5 text-[#111111]" />
                 PRICE CONVERGENCE CONVERSION TIMELINE
@@ -946,7 +946,7 @@ export default function DashboardPage() {
 
           {/* GRAPH E: SCATTER PLOT */}
           <div className="border border-[#111111] bg-white flex flex-col min-h-0 shadow-[4px_4px_0px_rgba(17,17,17,1)] relative overflow-hidden group">
-            <div className="bg-[#fafafa] border-b border-[#111111] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#111111] flex items-center justify-between">
+            <div className="bg-white border-b border-[#111111] px-3 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-[#111111] flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Sliders className="h-3.5 w-3.5 text-[#111111]" />
                 NEGOTIATION VELOCITY VS MARGIN CAPTURE %
@@ -1053,7 +1053,7 @@ export default function DashboardPage() {
         <div className="border border-[#111111] bg-white flex flex-col shadow-[4px_4px_0px_rgba(17,17,17,1)]">
           
           {/* LEDGER BAR HEADER CONTROLS */}
-          <div className="bg-[#fafafa] border-b border-[#111111] p-3 flex flex-col md:flex-row items-center justify-between gap-3 shrink-0">
+          <div className="bg-white border-b border-[#111111] p-3 flex flex-col md:flex-row items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-2">
               <div className="bg-[#111111] text-white p-1.5 border border-[#111111] shadow-[1px_1px_0px_rgba(17,17,17,1)]">
                 <Search className="h-3.5 w-3.5" />
@@ -1078,7 +1078,7 @@ export default function DashboardPage() {
                   placeholder="SEARCH ASSET LOT..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-7 pr-2.5 py-1 bg-white border border-[#111111] focus:bg-[#fafafa] font-mono text-[9px] text-[#111111] placeholder-gray-400 outline-none uppercase shadow-[1px_1px_0px_rgba(17,17,17,1)]"
+                  className="w-full pl-7 pr-2.5 py-1 bg-white border border-[#111111] focus:bg-white font-mono text-[9px] text-[#111111] placeholder-gray-400 outline-none uppercase shadow-[1px_1px_0px_rgba(17,17,17,1)]"
                 />
                 <Search className="absolute left-2.5 top-1.5 h-3 w-3 text-gray-400" />
               </div>
@@ -1088,7 +1088,7 @@ export default function DashboardPage() {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="appearance-none pl-2.5 pr-6 py-1 bg-white border border-[#111111] focus:bg-[#fafafa] font-mono text-[9px] text-[#111111] outline-none cursor-pointer uppercase rounded-none shadow-[1px_1px_0px_rgba(17,17,17,1)]"
+                  className="appearance-none pl-2.5 pr-6 py-1 bg-white border border-[#111111] focus:bg-white font-mono text-[9px] text-[#111111] outline-none cursor-pointer uppercase rounded-none shadow-[1px_1px_0px_rgba(17,17,17,1)]"
                 >
                   <option value="ALL">STATUS: ALL</option>
                   <option value="ACTIVE">ACTIVE</option>
@@ -1104,7 +1104,7 @@ export default function DashboardPage() {
                 <select
                   value={styleFilter}
                   onChange={(e) => setStyleFilter(e.target.value)}
-                  className="appearance-none pl-2.5 pr-6 py-1 bg-white border border-[#111111] focus:bg-[#fafafa] font-mono text-[9px] text-[#111111] outline-none cursor-pointer uppercase rounded-none shadow-[1px_1px_0px_rgba(17,17,17,1)]"
+                  className="appearance-none pl-2.5 pr-6 py-1 bg-white border border-[#111111] focus:bg-white font-mono text-[9px] text-[#111111] outline-none cursor-pointer uppercase rounded-none shadow-[1px_1px_0px_rgba(17,17,17,1)]"
                 >
                   <option value="ALL">STYLE: ALL</option>
                   <option value="DISTRIBUTIVE">DISTRIBUTIVE</option>

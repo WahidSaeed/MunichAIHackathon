@@ -427,7 +427,7 @@ function HomeContent() {
             padding: 12px;
             margin-top: 20px;
             margin-bottom: 25px;
-            background-color: #fafafa;
+            background-color: #ffffff;
           }
           .meta-grid {
             display: grid;
@@ -997,7 +997,7 @@ function HomeContent() {
       onDragOver={handleDrag}
       onDragLeave={handleDrag}
       onDrop={handleDrop}
-      className="h-screen w-screen flex flex-col font-sans select-none antialiased bg-[#fafafa] relative"
+      className="h-screen w-screen flex flex-col font-sans select-none antialiased bg-white relative"
     >
       {dragActive && (
         <div
@@ -1036,7 +1036,7 @@ function HomeContent() {
           </div>
           <button 
             onClick={() => fetchDeals()}
-            className="flex items-center gap-1.5 border border-[#111111] px-3 py-1 bg-[#fafafa] font-mono text-[10px] font-bold uppercase hover:bg-[#111111] hover:text-white transition-colors duration-100"
+            className="flex items-center gap-1.5 border border-[#111111] px-3 py-1 bg-white font-mono text-[10px] font-bold uppercase hover:bg-[#111111] hover:text-white transition-colors duration-100"
           >
             <RefreshCw className="h-3 w-3" />
             REFRESH LEDGER
@@ -1050,7 +1050,7 @@ function HomeContent() {
         {/* LEFT WORKSPACE SIDEBAR PANEL */}
         <aside className="w-80 min-h-0 border-r border-[#111111] bg-white flex flex-col shrink-0">
           
-          <div className="p-3 border-b border-[#111111] bg-[#fafafa]">
+          <div className="p-3 border-b border-[#111111] bg-white">
             <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-gray-500 block mb-1">
               ACTIVE TRADING ROOMS
             </span>
@@ -1060,7 +1060,7 @@ function HomeContent() {
           </div>
 
           {/* HISTORICAL SESSIONS LIST INDEX */}
-          <div className="flex-1 flex flex-col p-2 space-y-2 bg-[#fafafa] min-h-0">
+          <div className="flex-1 flex flex-col p-2 space-y-2 bg-white min-h-0">
             
             {/* MULTIMODAL INGESTION TERMINAL BOX */}
             <div className="border border-[#111111] bg-white flex flex-col shrink-0">
@@ -1128,7 +1128,7 @@ function HomeContent() {
                           value={rfqText}
                           onChange={(e) => setRfqText(e.target.value)}
                           placeholder="PASTE MESSY RFQ EMAIL, DRAG & DROP FILE, OR ATTACH..."
-                          className="w-full border border-[#111111] bg-white p-2 pr-8 font-mono text-[9px] text-[#111111] focus:outline-none placeholder-gray-400 leading-normal resize-none focus:bg-[#fafafa]"
+                          className="w-full border border-[#111111] bg-white p-2 pr-8 font-mono text-[9px] text-[#111111] focus:outline-none placeholder-gray-400 leading-normal resize-none focus:bg-white"
                           disabled={ingesting}
                           style={{ minHeight: "55px" }}
                         />
@@ -1153,7 +1153,7 @@ function HomeContent() {
 
                       {selectedFile && (
                         /* FILE PREVIEW CONTAINER */
-                        <div className="border border-[#111111] p-2 bg-[#fafafa] flex flex-col gap-2">
+                        <div className="border border-[#111111] p-2 bg-white flex flex-col gap-2">
                           <div className="flex items-center gap-2.5">
                             <div className="p-1.5 bg-white border border-[#111111] flex items-center justify-center shrink-0">
                               {(() => {
@@ -1222,7 +1222,7 @@ function HomeContent() {
                           : "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
                         : (activeDeal.negotiation_style || "DISTRIBUTIVE") === "DISTRIBUTIVE"
                         ? "bg-[#111111] text-white border-[#111111] cursor-pointer"
-                        : "bg-[#fafafa] text-gray-500 border-gray-200 hover:border-[#111111] hover:text-[#111111] cursor-pointer"
+                        : "bg-white text-gray-500 border-gray-200 hover:border-[#111111] hover:text-[#111111] cursor-pointer"
                     }`}
                   >
                     DISTRIBUTIVE
@@ -1238,7 +1238,7 @@ function HomeContent() {
                           : "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60"
                         : activeDeal.negotiation_style === "INTEGRATIVE"
                         ? "bg-[#111111] text-white border-[#111111] cursor-pointer"
-                        : "bg-[#fafafa] text-gray-500 border-gray-200 hover:border-[#111111] hover:text-[#111111] cursor-pointer"
+                        : "bg-white text-gray-500 border-gray-200 hover:border-[#111111] hover:text-[#111111] cursor-pointer"
                     }`}
                   >
                     INTEGRATIVE
@@ -1262,7 +1262,7 @@ function HomeContent() {
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-center transition-all duration-100 cursor-pointer border-r border-[#111111] ${
                       activeDrawer === "BUYER"
                         ? "bg-[#111111] text-white"
-                        : "bg-[#fafafa] text-gray-500 hover:bg-[#fafafa] hover:text-[#111111]"
+                        : "bg-white text-gray-500 hover:bg-white hover:text-[#111111]"
                     }`}
                   >
                     <ShoppingBag className="h-3 w-3" />
@@ -1274,7 +1274,7 @@ function HomeContent() {
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-center transition-all duration-100 cursor-pointer ${
                       activeDrawer === "SELLER"
                         ? "bg-[#111111] text-white"
-                        : "bg-[#fafafa] text-gray-500 hover:bg-[#fafafa] hover:text-[#111111]"
+                        : "bg-white text-gray-500 hover:bg-white hover:text-[#111111]"
                     }`}
                   >
                     <Tag className="h-3 w-3" />
@@ -1284,7 +1284,7 @@ function HomeContent() {
 
                 <div className="flex-1 flex flex-col min-h-0">
                   {/* Action/Sub-header Bar */}
-                  <div className="w-full flex justify-between items-center px-3 py-1.5 bg-[#fafafa] border-b border-[#111111] text-[#111111] font-mono text-[8px] font-bold uppercase tracking-wider">
+                  <div className="w-full flex justify-between items-center px-3 py-1.5 bg-white border-b border-[#111111] text-[#111111] font-mono text-[8px] font-bold uppercase tracking-wider">
                     <span className="text-gray-500 font-mono text-[8px]">
                       {activeDrawer === "BUYER" ? "ACTIVE BUY CHANNELS" : "ACTIVE SELL CHANNELS"}
                     </span>
@@ -1301,7 +1301,7 @@ function HomeContent() {
                   </div>
 
                   {/* Scrollable list */}
-                  <div className="flex-1 overflow-y-auto p-2 space-y-1.5 bg-[#fafafa]">
+                  <div className="flex-1 overflow-y-auto p-2 space-y-1.5 bg-white">
                     {showLotForm && newPerspective === activeDrawer && (
                       <form onSubmit={handleCreateLot} className="border border-[#111111] p-3 bg-white space-y-3 shrink-0 mb-2 animate-fade-in">
                         <div className="font-mono text-[10px] font-bold border-b border-[#111111] pb-1 uppercase flex justify-between items-center">
@@ -1320,7 +1320,7 @@ function HomeContent() {
                             placeholder="E.G. TITANIUM ROTOR ASSEMBLY"
                             value={newLotName}
                             onChange={(e) => setNewLotName(e.target.value)}
-                            className="w-full border border-[#111111] bg-white px-2 py-1.5 font-mono text-[10px] focus:outline-none focus:bg-[#fafafa]"
+                            className="w-full border border-[#111111] bg-white px-2 py-1.5 font-mono text-[10px] focus:outline-none focus:bg-white"
                           />
                         </div>
                         <div>
@@ -1334,7 +1334,7 @@ function HomeContent() {
                             max={5000}
                             value={newBudget}
                             onChange={(e) => setNewBudget(parseInt(e.target.value))}
-                            className="w-full border border-[#111111] bg-white px-2 py-1.5 font-mono text-[10px] focus:outline-none focus:bg-[#fafafa]"
+                            className="w-full border border-[#111111] bg-white px-2 py-1.5 font-mono text-[10px] focus:outline-none focus:bg-white"
                           />
                         </div>
                         <button
@@ -1373,7 +1373,7 @@ function HomeContent() {
 
           {/* ADMIN OPERATOR BADGE MODULE */}
           <div className="border-t border-[#111111] p-3 bg-white shrink-0">
-            <div className="border border-[#111111] p-2.5 bg-[#fafafa] flex flex-col gap-1.5">
+            <div className="border border-[#111111] p-2.5 bg-white flex flex-col gap-1.5">
               <div className="flex items-center gap-2 border-b border-gray-300 pb-1.5">
                 <div className="h-5 w-5 bg-[#111111] flex items-center justify-center">
                   <User className="h-3 w-3 text-white" />
@@ -1398,7 +1398,7 @@ function HomeContent() {
         </aside>
  
         {/* CENTER EXCHANGE CHAT FEED VIEWPORT */}
-        <section className="flex-1 min-h-0 flex flex-col bg-[#fafafa]">
+        <section className="flex-1 min-h-0 flex flex-col bg-white">
           
           {/* ACTIVE LOT CONTEXT BAR */}
           <div className="h-11 border-b border-[#111111] bg-white px-4 flex items-center justify-between shrink-0">
@@ -1632,7 +1632,7 @@ function HomeContent() {
                       
                       {/* DIRECT OVERRIDE FORM LINE */}
                       <form onSubmit={handleSendOperatorMessage} className="flex-1 flex border border-[#111111]">
-                        <div className="bg-[#fafafa] border-r border-[#111111] px-3 flex items-center">
+                        <div className="bg-white border-r border-[#111111] px-3 flex items-center">
                           <Terminal className="h-3.5 w-3.5 text-gray-500" />
                         </div>
                         <input
@@ -1647,7 +1647,7 @@ function HomeContent() {
                           }
                           value={operatorMsg}
                           onChange={(e) => setOperatorMessage(e.target.value)}
-                          className="flex-1 px-3 py-2.5 font-mono text-xs uppercase bg-white focus:outline-none focus:bg-[#fafafa] disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          className="flex-1 px-3 py-2.5 font-mono text-xs uppercase bg-white focus:outline-none focus:bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
                         />
                         <button
                           type="submit"
@@ -1747,7 +1747,7 @@ function HomeContent() {
               </div>
 
               {/* BLOCK 2: COGNITIVE SOURCING STRATEGY PARAMETERS */}
-              <div className="border border-[#111111] bg-[#fafafa] p-3 font-mono shrink-0 flex flex-col space-y-2">
+              <div className="border border-[#111111] bg-white p-3 font-mono shrink-0 flex flex-col space-y-2">
                 <div className="font-mono text-[9px] font-bold text-[#111111] border-b border-dashed border-gray-400 pb-1 uppercase tracking-wider">
                   COGNITIVE SHOULD-COST CALCULATOR
                 </div>
@@ -1943,7 +1943,7 @@ function HomeContent() {
             </div>
 
             {/* Modal Footer */}
-            <div className="h-10 bg-[#fafafa] border-t border-[#111111] px-4 flex items-center justify-between shrink-0 font-mono text-[9px] text-gray-500 uppercase font-bold">
+            <div className="h-10 bg-white border-t border-[#111111] px-4 flex items-center justify-between shrink-0 font-mono text-[9px] text-gray-500 uppercase font-bold">
               <span>SECURITY AUTH: LEVEL 4 ROOT ESCROW OPERATOR</span>
               <span>ATIRA PROCUREMENT CONTRACT INDEX PROTOCOL v1.0</span>
             </div>
@@ -2027,7 +2027,7 @@ function HomeContent() {
                       value={rfqText}
                       onChange={(e) => setRfqText(e.target.value)}
                       placeholder="PASTE MESSY EMAIL CHAINS, PROCUREMENT PDF SPECIFICATIONS, REQ SHEETS OR DRAG FILES OVER..."
-                      className="w-full flex-1 border border-[#111111] bg-white p-4 font-mono text-xs text-[#111111] focus:outline-none placeholder-gray-400 leading-relaxed resize-none focus:bg-[#fafafa]"
+                      className="w-full flex-1 border border-[#111111] bg-white p-4 font-mono text-xs text-[#111111] focus:outline-none placeholder-gray-400 leading-relaxed resize-none focus:bg-white"
                       disabled={ingesting}
                     />
                   </div>
@@ -2041,7 +2041,7 @@ function HomeContent() {
                         </label>
                         <div 
                           onClick={() => document.getElementById("rfq-file-input-full")?.click()}
-                          className="border-2 border-dashed border-gray-300 hover:border-[#111111] bg-[#fafafa] hover:bg-[#f3f3f3] transition-all duration-150 p-6 flex flex-col items-center justify-center text-center cursor-pointer min-h-[160px] shrink-0"
+                          className="border-2 border-dashed border-gray-300 hover:border-[#111111] bg-white hover:bg-gray-50 transition-all duration-150 p-6 flex flex-col items-center justify-center text-center cursor-pointer min-h-[160px] shrink-0"
                         >
                           <Paperclip className="h-6 w-6 text-gray-400 mb-2 animate-pulse" />
                           <span className="font-mono text-[10px] font-bold text-[#111111] uppercase">
@@ -2065,7 +2065,7 @@ function HomeContent() {
                         /* FILE PREVIEW COMPONENT */
                         <div className="border border-[#111111] p-3 bg-white flex flex-col gap-2 shadow-[4px_4px_0px_rgba(17,17,17,1)] shrink-0">
                           <div className="flex items-center gap-3">
-                            <div className="p-2 bg-[#fafafa] border border-[#111111] flex items-center justify-center shrink-0">
+                            <div className="p-2 bg-white border border-[#111111] flex items-center justify-center shrink-0">
                               {(() => {
                                 const ext = selectedFile.name.split(".").pop()?.toLowerCase();
                                 if (["png", "jpg", "jpeg", "webp", "gif"].includes(ext || "")) {
@@ -2118,7 +2118,7 @@ function HomeContent() {
             )}
             
             {/* Modal Footer */}
-            <div className="h-10 bg-[#fafafa] border-t border-[#111111] px-4 flex items-center justify-between shrink-0 font-mono text-[9px] text-gray-500 uppercase font-bold">
+            <div className="h-10 bg-white border-t border-[#111111] px-4 flex items-center justify-between shrink-0 font-mono text-[9px] text-gray-500 uppercase font-bold">
               <span>SECURITY AUTH: LEVEL 4 ROOT ESCROW OPERATOR</span>
               <span>ATIRA MULTIMODAL INBOUND PARSER PIPELINE v1.0</span>
             </div>
@@ -2139,7 +2139,7 @@ export default function Home() {
 
   if (!isMounted) {
     return (
-      <div className="h-screen w-screen bg-[#fafafa] flex items-center justify-center font-mono text-xs uppercase text-[#111111]">
+      <div className="h-screen w-screen bg-white flex items-center justify-center font-mono text-xs uppercase text-[#111111]">
         <span>Loading Atira Portal...</span>
       </div>
     );
