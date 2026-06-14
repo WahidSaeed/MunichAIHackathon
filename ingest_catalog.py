@@ -6,6 +6,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
+from urllib.parse import urlparse, urlunparse
 
 # Add root to python path for importing database and models
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
@@ -782,6 +783,27 @@ def parse_prices(tier_str: str):
         return val, val
     return 100, 1000
 
+def build_validated_url(base_url: str) -> str:
+    try:
+        # Minimal path validation
+        if "/../" in base_url or re.search(r"/%2e%2e/", base_url, re.IGNORECASE):
+            raise ValueError("Invalid path")
+        
+        parsed = urlparse(base_url)
+        
+        # Protocol + host checks
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError("Invalid protocol")
+        if not parsed.hostname:
+            raise ValueError("Invalid host")
+        allowed_domains = ["example.com"]  # add your allowed domains here
+        if parsed.hostname.lower() not in allowed_domains:
+            raise ValueError("Invalid host")
+        
+        return urlunparse(parsed)
+    except Exception:
+        raise ValueError("Invalid URL")
+
 def download_image(url: str, save_path: str) -> bool:
     """
     Downloads an image from a URL and saves it locally.
@@ -794,7 +816,7 @@ def download_image(url: str, save_path: str) -> bool:
             raise Exception("Invalid file path")
         os.makedirs(os.path.dirname(target_real), exist_ok=True)
         req = urllib.request.Request(
-            url,
+            validated_url,
             headers={'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'}
         )
         with urllib.request.urlopen(req) as response:
