@@ -1,6 +1,6 @@
-# ATIRA: Autonomous B2B Procurement, Escrow & Multi-Variable Settlement Platform
+# ATIRAA: Autonomous B2B Procurement, Escrow & Multi-Variable Settlement Platform
 
-ATIRA is a production-grade, dual-perspective bilateral B2B procurement, escrow, and automated contract settlement platform. Designed for high-volume enterprise supply chains, ATIRA leverages advanced **autonomous multi-agent negotiation loops**, **unstructured multi-modal RFQ ingestion with visual VLM reasoning**, **live market search grounding**, and a **real-time LLM observability dashboard powered by Fastino and Pioneer**.
+ATIRAA is a production-grade, dual-perspective bilateral B2B procurement, escrow, and automated contract settlement platform. Designed for high-volume enterprise supply chains, ATIRAA leverages advanced **autonomous multi-agent negotiation loops**, **unstructured multi-modal RFQ ingestion with visual VLM reasoning**, **live market search grounding**, and a **real-time LLM observability dashboard powered by Fastino and Pioneer**.
 
 Enterprise operators can view active negotiation pipelines, toggle strategic posturing (Transactional Distributive vs. Collaborative Integrative), intervene via a mathematical **Tactical Cognitive Response Board**, handle deadlocks with administrative overrides, and export legally binding vector PDF escrow contracts.
 
@@ -32,7 +32,7 @@ graph TD
     %% State Layer
     subgraph Storage ["3. PostgreSQL Persistence"]
         Tavily --> Seed["Database Seeder Engine"]
-        Seed --> |Create Lot & Seed Participants| PG[("PostgreSQL Database<br/>(atira_postgres_db)")]
+        Seed --> |Create Lot & Seed Participants| PG[("PostgreSQL Database<br/>(ATIRAA_postgres_db)")]
     end
 
     %% Core Settlement Layer
@@ -100,7 +100,7 @@ graph TD
 ## 📂 Project Directory Structure
 
 ```text
-atira-procurement/
+ATIRAA-procurement/
 ├── backend/
 │   ├── database.py       # DB Engine, Session Local context & pool configuration
 │   ├── models.py         # SQLAlchemy schemas (Deal, Participant, Message, Inventory)
@@ -133,14 +133,14 @@ Before launching the services, ensure you have the following installed on your s
 ---
 
 ### **1. Spin Up PostgreSQL Docker Database**
-ATIRA expects a persistent PostgreSQL database instance. Spin up the dedicated alpine container:
+ATIRAA expects a persistent PostgreSQL database instance. Spin up the dedicated alpine container:
 ```bash
 docker run -d \
-  --name atira_postgres_db \
+  --name ATIRAA_postgres_db \
   -p 5432:5432 \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=atira_procurement \
+  -e POSTGRES_DB=ATIRAA_procurement \
   postgres:15-alpine
 ```
 
@@ -161,7 +161,7 @@ docker run -d \
 3. Configure the environment secrets. Create a `.env` file in the **root** folder (which is read by both the backend and our reset script):
    ```ini
    # Database URI targeting our container
-   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/atira_procurement
+   DATABASE_URL=postgresql://postgres:postgres@localhost:5432/ATIRAA_procurement
 
    # API Gateways (Required for live executions)
    GEMINI_API_KEY=your_google_gemini_api_key
@@ -265,7 +265,7 @@ ALL API LOGIC INTEGRITY TESTS PASSED SUCCESSFULLY!
 
 ## 🧠 Strategic Sourcing Dimensions (Distributive vs. Integrative)
 
-ATIRA features two mathematically modeled, completely separate strategic bargaining postures:
+ATIRAA features two mathematically modeled, completely separate strategic bargaining postures:
 
 ### **1. Distributive Strategy (Transactional & Value-Capturing)**
 * **Posture**: Aggressive, Zero-Sum, Win-Lose bargaining focusing solely on raw pricing margins.
@@ -308,7 +308,7 @@ The `/observability` module simulates a high-fidelity continuous learning loop u
 
 ## 👩‍⚖️ Jury Evaluation Step-by-Step Walkthrough
 
-To experience the complete power of the ATIRA platform during your jury evaluation, follow these guided steps:
+To experience the complete power of the ATIRAA platform during your jury evaluation, follow these guided steps:
 
 ### **Step 1: Paste a Messy RFQ Email**
 1. Copy the following unstructured, messy email snippet:
@@ -342,9 +342,9 @@ To experience the complete power of the ATIRA platform during your jury evaluati
 1. Click the **Maximize Contract [Square Icon]** inside the right-hand sidebar.
 2. Review the structured, fullscreen markdown specifications.
 3. Click the **Download Vector PDF** icon.
-4. Review the pixel-perfect, double-bordered legal contract print layout, complete with your transaction hashes and the **Atira Escrow Stamp**!
+4. Review the pixel-perfect, double-bordered legal contract print layout, complete with your transaction hashes and the **ATIRAA Escrow Stamp**!
 
 ---
 
 ## 📄 License & Intellectual Property
-ATIRA is developed as a high-fidelity enterprise reference architecture. All codebases, database systems, visual layout definitions, and multi-agent settlement engines are the sole intellectual property of the engineering team. For support or custom continuous fine-tuning adapters integrations, contact your ATIRA enterprise operations lead.
+ATIRAA is developed as a high-fidelity enterprise reference architecture. All codebases, database systems, visual layout definitions, and multi-agent settlement engines are the sole intellectual property of the engineering team. For support or custom continuous fine-tuning adapters integrations, contact your ATIRAA enterprise operations lead.

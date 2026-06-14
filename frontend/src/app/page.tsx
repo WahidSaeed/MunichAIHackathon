@@ -620,7 +620,7 @@ function HomeContent() {
       <body>
         <div class="container">
           <div>
-            <div class="header-title">ATIRA PROCUREMENT COVENANT SPECIFICATION</div>
+            <div class="header-title">ATIRAA PROCUREMENT COVENANT SPECIFICATION</div>
             <div class="header-subtitle">Official Transaction Room Asset Dossier & Protocol Record</div>
           </div>
           
@@ -659,12 +659,12 @@ function HomeContent() {
           </div>
           
           <div class="stamp-box">
-            ESCROW STATUS SECURED // VERIFIED BY ATIRA PROCUREMENT INDEX PROTOCOL v1.0 // NO REFUNDS OR RETRACTIONS ALLOWED AFTER BID/ASK MATCHING
+            ESCROW STATUS SECURED // VERIFIED BY ATIRAA PROCUREMENT INDEX PROTOCOL v1.0 // NO REFUNDS OR RETRACTIONS ALLOWED AFTER BID/ASK MATCHING
           </div>
           
           <div class="footer">
             <span>SYSTEM REFERENCE: ${activeDeal.id.slice(0, 16).toUpperCase()}</span>
-            <span>ATIRA INTELLECTUAL PROPERTY &copy; ${new Date().getFullYear()}</span>
+            <span>ATIRAA INTELLECTUAL PROPERTY &copy; ${new Date().getFullYear()}</span>
           </div>
         </div>
       </body>
@@ -1431,7 +1431,7 @@ function HomeContent() {
             <Layers className="h-4 w-4 text-white" />
           </div>
           <span className="font-mono text-sm font-bold uppercase tracking-widest text-[#111111]">
-            ATIRA | PROCUREMENT & ESCROW PLATFORM | V1.0
+            ATIRAA | PROCUREMENT & ESCROW PLATFORM | V1.0
           </span>
         </div>
         <div className="flex items-center gap-4">
@@ -2665,7 +2665,7 @@ function HomeContent() {
             {/* Modal Footer */}
             <div className="h-10 bg-white border-t border-[#111111] px-4 flex items-center justify-between shrink-0 font-mono text-[9px] text-gray-500 uppercase font-bold">
               <span>SECURITY AUTH: LEVEL 4 ROOT ESCROW OPERATOR</span>
-              <span>ATIRA PROCUREMENT CONTRACT INDEX PROTOCOL v1.0</span>
+              <span>ATIRAA PROCUREMENT CONTRACT INDEX PROTOCOL v1.0</span>
             </div>
           </div>
         </div>
@@ -2840,7 +2840,7 @@ function HomeContent() {
             {/* Modal Footer */}
             <div className="h-10 bg-white border-t border-[#111111] px-4 flex items-center justify-between shrink-0 font-mono text-[9px] text-gray-500 uppercase font-bold">
               <span>SECURITY AUTH: LEVEL 4 ROOT ESCROW OPERATOR</span>
-              <span>ATIRA MULTIMODAL INBOUND PARSER PIPELINE v1.0</span>
+              <span>ATIRAA MULTIMODAL INBOUND PARSER PIPELINE v1.0</span>
             </div>
           </div>
         </div>
@@ -2860,7 +2860,7 @@ export default function Home() {
   if (!isMounted) {
     return (
       <div className="h-screen w-screen bg-white flex items-center justify-center font-mono text-xs uppercase text-[#111111]">
-        <span>Loading Atira Portal...</span>
+        <span>Loading ATIRAA Portal...</span>
       </div>
     );
   }
