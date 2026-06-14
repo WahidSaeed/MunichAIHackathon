@@ -23,6 +23,7 @@ import {
   ShoppingBag,
   Tag,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   Maximize2,
   Minimize2,
@@ -31,7 +32,11 @@ import {
   FileSpreadsheet,
   FileImage,
   Paperclip,
-  Download
+  Download,
+  MoreVertical,
+  Archive,
+  Trash2,
+  BrainCircuit
 } from "lucide-react";
 
 
@@ -153,6 +158,8 @@ interface Deal {
   participants: Participant[];
   messages: Message[];
   negotiation_style: string;
+  is_archived: boolean;
+  confidence_score?: number;
 }
 
 const renderFormattedText = (text: string) => {
@@ -242,6 +249,30 @@ const renderFormattedText = (text: string) => {
   return <>{parts}</>;
 };
 
+const isWaitingForHuman = (d: Deal) => {
+  if (d.status !== "ACTIVE" || d.is_archived) return false;
+  const hasHuman = (d.participants || []).some(p => p.name.includes("(You)"));
+  if (!hasHuman) return false;
+
+  // If confidence score is high (>= 0.8), we do NOT wait for a human.
+  // The AI will automatically negotiate on behalf of the human operator!
+  if (d.confidence_score !== undefined && d.confidence_score !== null && d.confidence_score >= 0.8) {
+    return false;
+  }
+
+  const messages = d.messages || [];
+  if (messages.length === 0) return false;
+
+  const lastMsg = messages[messages.length - 1];
+  
+  if (d.perspective === "BUYER") {
+    return lastMsg.role === "SELLER";
+  } else if (d.perspective === "SELLER") {
+    return lastMsg.role === "BUYER";
+  }
+  return false;
+};
+
 function HomeContent() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
@@ -255,6 +286,20 @@ function HomeContent() {
   const [submitting, setSubmitting] = useState(false);
   const [showLotForm, setShowLotForm] = useState(false);
   const [activeDrawer, setActiveDrawer] = useState<"BUYER" | "SELLER" | null>("BUYER");
+  const [showArchivedBuyer, setShowArchivedBuyer] = useState(false);
+  const [showArchivedSeller, setShowArchivedSeller] = useState(false);
+  const [openMenuDealId, setOpenMenuDealId] = useState<string | null>(null);
+  const [confirmDeleteDealId, setConfirmDeleteDealId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openMenuDealId) return;
+    const handleOutsideClick = () => {
+      setOpenMenuDealId(null);
+      setConfirmDeleteDealId(null);
+    };
+    window.addEventListener("click", handleOutsideClick);
+    return () => window.removeEventListener("click", handleOutsideClick);
+  }, [openMenuDealId]);
   const [rfqText, setRfqText] = useState("");
   const [ingesting, setIngesting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -267,6 +312,11 @@ function HomeContent() {
   const prevActiveDealIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef<number>(0);
   const isProcessingRef = useRef<boolean>(false);
+
+  const [typingDeals, setTypingDeals] = useState<Record<string, boolean>>({});
+  const [isStrategicBoardOpen, setIsStrategicBoardOpen] = useState(true);
+  const backgroundTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const backgroundProcessingRef = useRef<Record<string, boolean>>({});
 
   // Real-time telemetry monitoring states
   const [pioneerStream, setPioneerStream] = useState<any[]>([]);
@@ -285,6 +335,88 @@ function HomeContent() {
   }, []);
 
   const activeDeal = deals.find(d => d.id === activeDealId) || null;
+
+  // Strategic board calculations & presets
+  const humanPart = activeDeal?.participants?.find(p => p.name.includes("(You)"));
+  const aiPart = activeDeal?.participants?.find(p => !p.name.includes("(You)"));
+
+  const humanPrice = humanPart?.current_price_point || 0;
+  const aiPrice = aiPart?.current_price_point || 0;
+  const isBuyerStance = activeDeal?.perspective === "BUYER";
+  const hasHumanParticipant = !!humanPart;
+
+  // Calculates math values
+  const compromisePrice = Math.round((humanPrice + aiPrice) / 2) || 0;
+  
+  // Concession (Buyer steps up, Seller steps down by ~30% of spread)
+  const concessionPrice = isBuyerStance 
+    ? Math.round(humanPrice + (aiPrice - humanPrice) * 0.3)
+    : Math.round(humanPrice - (humanPrice - aiPrice) * 0.3);
+
+  // Extreme concession request
+  const extremePrice = isBuyerStance
+    ? Math.max(humanPrice, Math.round(aiPrice * 0.95))
+    : Math.min(humanPrice, Math.round(aiPrice * 1.05));
+
+  // SLA Premium Offer (Paying closer to counterpart ask, but demanding high SLA)
+  const premiumSlaPrice = isBuyerStance
+    ? Math.round(aiPrice * 0.98)
+    : Math.round(aiPrice * 1.02);
+
+  // Structured presets
+  const agreePreset = isBuyerStance ? {
+    label: `SETTLE @ ${aiPrice} EUR`,
+    text: `We accept your latest offer of ${aiPrice} EUR under the proposed terms.`,
+    tooltip: `Accepts the counterpart's latest pricing proposal of ${aiPrice} EUR.`
+  } : {
+    label: `SETTLE @ ${aiPrice} EUR`,
+    text: `We accept your latest proposal of ${aiPrice} EUR under the proposed terms.`,
+    tooltip: `Accepts the counterpart's latest pricing proposal of ${aiPrice} EUR.`
+  };
+
+  const standFirmPreset = {
+    label: `STAND FIRM @ ${humanPrice} EUR`,
+    text: `Our current proposal of ${humanPrice} EUR is fully justified by our strict parameters. We stand firm on our position.`,
+    tooltip: `Declares that you will not concede your current position.`
+  };
+
+  const concessionPreset = {
+    label: `CONCEDE TO ${concessionPrice} EUR`,
+    text: `We can make a minor concession and adjust our pricing offer to ${concessionPrice} EUR under standard warranty and payment terms.`,
+    tooltip: `Offers a minor price adjustment to move closer to agreement.`
+  };
+
+  const extremePreset = isBuyerStance ? {
+    label: `DEMAND ${extremePrice} EUR`,
+    text: `To make this deal viable, we request that you adjust your price offer to ${extremePrice} EUR to align with typical market benchmarks.`,
+    tooltip: `Demands a substantial price reduction from the counterpart.`
+  } : {
+    label: `DEMAND ${extremePrice} EUR`,
+    text: `We request that you raise your bid to ${extremePrice} EUR to better align with high-performance hardware specs.`,
+    tooltip: `Demands a substantial price increase from the counterpart.`
+  };
+
+  const tcoCompromisePreset = isBuyerStance ? {
+    label: `COMPROMISE @ ${compromisePrice} EUR (TCO)`,
+    text: `[Offer: ${compromisePrice} EUR | 3Yr Warranty | Net 60 | SLA: 99.5%] We can meet at a midpoint compromise of ${compromisePrice} EUR if we trade for an extended 3-year warranty and deferred Net 60 terms.`,
+    tooltip: `Trades a higher price in exchange for warranty and payment term expansions.`
+  } : {
+    label: `COMPROMISE @ ${compromisePrice} EUR (TCO)`,
+    text: `[Offer: ${compromisePrice} EUR | 3Yr Warranty | Net 45 | SLA: 99.0%] We can compromise at a midpoint price of ${compromisePrice} EUR if we offer an extended 3-year warranty under a standard Net 45 payment window.`,
+    tooltip: `Lowers your price in exchange for extended warranty and accelerated payment terms.`
+  };
+
+  const slaPremiumPreset = isBuyerStance ? {
+    label: `SLA PREMIUM @ ${premiumSlaPrice} EUR`,
+    text: `[Offer: ${premiumSlaPrice} EUR | 1Yr Warranty | Net 30 | SLA: 99.9%] We are willing to authorize a premium price of ${premiumSlaPrice} EUR, strictly conditional on a guaranteed 99.9% uptime SLA commitment.`,
+    tooltip: `Offers a high price, strictly conditional on a strict 99.9% SLA guarantee.`
+  } : {
+    label: `SLA PREMIUM @ ${premiumSlaPrice} EUR`,
+    text: `[Offer: ${premiumSlaPrice} EUR | 2Yr Warranty | Net 30 | SLA: 99.9%] We can authorize ${premiumSlaPrice} EUR with a premium 99.9% uptime SLA commitment.`,
+    tooltip: `Offers a high-value proposal with premium uptime guarantees.`
+  };
+
+  const isHaltedOrFinished = activeDeal?.status === "TERMINATED" || activeDeal?.status === "MATCHED";
 
   const handleDownloadPDF = () => {
     if (!activeDeal) return;
@@ -563,7 +695,12 @@ function HomeContent() {
       setDeals(data);
       if (data.length > 0) {
         if (selectFirst || !activeDealId) {
-          setActiveDealId(data[0].id);
+          const activeOnly = data.filter((d: Deal) => !d.is_archived);
+          if (activeOnly.length > 0) {
+            setActiveDealId(activeOnly[0].id);
+          } else {
+            setActiveDealId(data[0].id);
+          }
         }
       }
     } catch (e) {
@@ -612,6 +749,56 @@ function HomeContent() {
     }
   };
 
+  // Archive/Unarchive a deal environment
+  const handleArchiveDeal = async (dealId: string, archive: boolean) => {
+    try {
+      const res = await fetch(`http://localhost:8080/api/deals/${dealId}/archive?is_archived=${archive}`, {
+        method: "PUT",
+      });
+      if (res.ok) {
+        // If the archived deal was currently active, shift focus to another active deal
+        if (archive && activeDealId === dealId) {
+          const remainingDeals = deals.filter(d => d.id !== dealId && !d.is_archived);
+          if (remainingDeals.length > 0) {
+            setActiveDealId(remainingDeals[0].id);
+          } else {
+            setActiveDealId(null);
+          }
+        }
+        await fetchDeals();
+      } else {
+        console.error("Failed to archive deal:", await res.text());
+      }
+    } catch (e) {
+      console.error("Error archiving deal:", e);
+    }
+  };
+
+  // Permanently delete a deal environment
+  const handleDeleteDeal = async (dealId: string) => {
+    try {
+      const res = await fetch(`http://localhost:8080/api/deals/${dealId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        // If the deleted deal was currently active, shift focus to another active deal
+        if (activeDealId === dealId) {
+          const remainingDeals = deals.filter(d => d.id !== dealId && !d.is_archived);
+          if (remainingDeals.length > 0) {
+            setActiveDealId(remainingDeals[0].id);
+          } else {
+            setActiveDealId(null);
+          }
+        }
+        await fetchDeals();
+      } else {
+        console.error("Failed to delete deal:", await res.text());
+      }
+    } catch (e) {
+      console.error("Error deleting deal:", e);
+    }
+  };
+
 
 
   useEffect(() => {
@@ -644,19 +831,19 @@ function HomeContent() {
 
     const lastMsg = messages[messages.length - 1];
     const perspective = activeDeal.perspective;
+    const hasHuman = (activeDeal.participants || []).some(p => p.name.includes("(You)"));
 
-    // AI agent should respond if the last message is from the human role or the system
-    let shouldAiRespond = false;
-    if (perspective === "BUYER") {
-      shouldAiRespond = lastMsg.role === "BUYER" || lastMsg.role === "OPERATOR" || lastMsg.role === "SYSTEM";
-    } else if (perspective === "SELLER") {
-      shouldAiRespond = lastMsg.role === "SELLER" || lastMsg.role === "OPERATOR" || lastMsg.role === "SYSTEM";
-    }
+    // AI agent should respond if the deal is active and we are NOT waiting for a human intervention.
+    const shouldAiRespond = !isWaitingForHuman(activeDeal);
 
     if (shouldAiRespond) {
       isProcessingRef.current = true;
       setIsTyping(true);
-      const delay = Math.floor(Math.random() * 9000) + 1000; // between 1 and 10 seconds
+      // Use a slightly faster typing delay for automated simulation or high confidence (1.5 to 4s) vs human (1 to 10s)
+      const isAutoNegotiating = !hasHuman || (activeDeal.confidence_score !== undefined && activeDeal.confidence_score !== null && activeDeal.confidence_score >= 0.8);
+      const delay = isAutoNegotiating 
+        ? Math.floor(Math.random() * 2500) + 1500 
+        : Math.floor(Math.random() * 9000) + 1000;
 
       const timer = setTimeout(async () => {
         try {
@@ -684,21 +871,107 @@ function HomeContent() {
         setIsTyping(false);
       };
     }
-  }, [activeDealId, activeDeal?.status, activeDeal?.messages?.length, activeDeal?.perspective, stepping]);
+  }, [activeDealId, activeDeal?.status, activeDeal?.messages?.length, activeDeal?.perspective, activeDeal?.participants, stepping]);
+
+  // Component unmount cleanup for background timers
+  useEffect(() => {
+    return () => {
+      Object.values(backgroundTimersRef.current).forEach(clearTimeout);
+    };
+  }, []);
+
+  // Background continuous negotiation loops for unselected channels
+  useEffect(() => {
+    // 1. Clean up timers for any deal that is now the active deal, or is archived/not active
+    const unselectedActiveDealIds = new Set(
+      deals
+        .filter(d => d.id !== activeDealId && d.status === "ACTIVE" && !d.is_archived)
+        .map(d => d.id)
+    );
+
+    // Cancel timers for deals that are no longer unselected active deals
+    Object.keys(backgroundTimersRef.current).forEach((id) => {
+      if (!unselectedActiveDealIds.has(id)) {
+        clearTimeout(backgroundTimersRef.current[id]);
+        delete backgroundTimersRef.current[id];
+        delete backgroundProcessingRef.current[id];
+        setTypingDeals(prev => {
+          const updated = { ...prev };
+          delete updated[id];
+          return updated;
+        });
+      }
+    });
+
+    // 2. Start timers for any unselected active deals that need a response and don't have a timer yet
+    deals.forEach((d) => {
+      if (d.id === activeDealId || d.status !== "ACTIVE" || d.is_archived) {
+        return;
+      }
+
+      // Check if a timer or process is already active for this deal
+      if (backgroundTimersRef.current[d.id] || backgroundProcessingRef.current[d.id]) {
+        return;
+      }
+
+      const messages = d.messages || [];
+      if (messages.length === 0) return;
+
+      const lastMsg = messages[messages.length - 1];
+      const hasHuman = (d.participants || []).some(p => p.name.includes("(You)"));
+
+      // AI agent should respond if the deal is active and we are NOT waiting for a human intervention.
+      const shouldAiRespond = !isWaitingForHuman(d);
+
+      if (shouldAiRespond) {
+        // Mark as processing and set typing indicator
+        backgroundProcessingRef.current[d.id] = true;
+        setTypingDeals(prev => ({ ...prev, [d.id]: true }));
+
+        const delay = Math.floor(Math.random() * 2500) + 2500; // Staggered 2.5s to 5s delay
+
+        const timer = setTimeout(async () => {
+          try {
+            const res = await fetch("http://localhost:8080/api/negotiate/step", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ deal_id: d.id })
+            });
+            if (res.ok) {
+              await fetchDeals();
+            }
+          } catch (e) {
+            console.error("Error in background negotiation step:", d.id, e);
+          } finally {
+            // Clean up flags
+            delete backgroundProcessingRef.current[d.id];
+            delete backgroundTimersRef.current[d.id];
+            setTypingDeals(prev => {
+              const updated = { ...prev };
+              delete updated[d.id];
+              return updated;
+            });
+          }
+        }, delay);
+
+        backgroundTimersRef.current[d.id] = timer;
+      }
+    });
+  }, [deals, activeDealId]);
 
   // Auto-scroll chat feed to the bottom ONLY on active deal change or actual new messages
   useEffect(() => {
     if (!activeDeal) return;
 
-    const currentMessageCount = activeDeal.messages.length;
-    const dealChanged = activeDeal.id !== prevActiveDealIdRef.current;
+    const currentMessageCount = activeDeal?.messages?.length || 0;
+    const dealChanged = activeDeal?.id !== prevActiveDealIdRef.current;
     const newMessageAdded = currentMessageCount > prevMessageCountRef.current;
 
     if (dealChanged || newMessageAdded || isTyping) {
       if (chatEndRef.current) {
         chatEndRef.current.scrollIntoView({ behavior: "smooth" });
       }
-      prevActiveDealIdRef.current = activeDeal.id;
+      prevActiveDealIdRef.current = activeDeal?.id || null;
       prevMessageCountRef.current = currentMessageCount;
     } else {
       prevMessageCountRef.current = currentMessageCount;
@@ -910,11 +1183,29 @@ function HomeContent() {
     }
   };
 
+  // Predefined Preset Message Dispatcher
+  const handleSendPreset = async (msgText: string) => {
+    if (!activeDealId || !msgText.trim()) return;
+    try {
+      await fetch("http://localhost:8080/api/negotiate/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deal_id: activeDealId,
+          message_text: msgText
+        })
+      });
+      await fetchDeals();
+    } catch (e) {
+      console.error("Error submitting predefined preset response:", e);
+    }
+  };
+
   // Calculate pricing matrices and spreads
   const getLiquidityLedger = () => {
     if (!activeDeal) return { bids: [], asks: [], spread: "N/A" };
-    const buyers = activeDeal.participants.filter(p => p.role === "BUYER");
-    const sellers = activeDeal.participants.filter(p => p.role === "SELLER");
+    const buyers = (activeDeal?.participants || []).filter(p => p.role === "BUYER");
+    const sellers = (activeDeal?.participants || []).filter(p => p.role === "SELLER");
 
     const bids = sortedParticipants(buyers, true);
     const asks = sortedParticipants(sellers, false);
@@ -940,8 +1231,13 @@ function HomeContent() {
 
   const { bids, asks, spread } = getLiquidityLedger();
 
-  const buyerDeals = deals.filter(d => d.perspective === "BUYER" || !d.perspective);
-  const sellerDeals = deals.filter(d => d.perspective === "SELLER");
+  const deadlockedDeals = deals.filter(d => d.status === "DEADLOCK" && !d.is_archived);
+  const awaitingHumanDeals = deals.filter(d => isWaitingForHuman(d));
+
+  const buyerDeals = deals.filter(d => (d.perspective === "BUYER" || !d.perspective) && !d.is_archived);
+  const sellerDeals = deals.filter(d => d.perspective === "SELLER" && !d.is_archived);
+  const archivedBuyerDeals = deals.filter(d => (d.perspective === "BUYER" || !d.perspective) && d.is_archived);
+  const archivedSellerDeals = deals.filter(d => d.perspective === "SELLER" && d.is_archived);
 
   const renderDealChannel = (d: Deal) => {
     const isActive = d.id === activeDealId;
@@ -950,35 +1246,82 @@ function HomeContent() {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "");
 
+    const isDeadlocked = d.status === "DEADLOCK";
+    const isAwaitingHuman = isWaitingForHuman(d);
+    
+    let borderStyles = "";
+    if (isDeadlocked) {
+      borderStyles = isActive 
+        ? "border-[#E11D48] bg-[#FFF1F2] shadow-[2px_2px_0px_rgba(225,29,72,1)]" 
+        : "border-[#FDA4AF] bg-white hover:border-[#E11D48] hover:shadow-[1px_1px_0px_rgba(225,29,72,0.4)]";
+    } else if (isAwaitingHuman) {
+      borderStyles = isActive
+        ? "border-amber-500 bg-[#FFFBEB] shadow-[2px_2px_0px_rgba(245,158,11,1)]"
+        : "border-amber-300 bg-white hover:border-amber-500 hover:shadow-[1px_1px_0px_rgba(245,158,11,0.4)]";
+    } else {
+      borderStyles = isActive
+        ? "border-[#111111] bg-white shadow-[2px_2px_0px_rgba(17,17,17,1)]"
+        : "border-gray-200 bg-white hover:border-[#111111]";
+    }
+
     return (
-      <button
+      <div
         key={d.id}
         onClick={() => {
           setActiveDealId(d.id);
           setShowLotForm(false);
         }}
-        className={`w-full border p-2 text-left transition-all duration-100 flex flex-col gap-1 ${
-          isActive 
-            ? "border-[#111111] bg-white shadow-[2px_2px_0px_rgba(17,17,17,1)]" 
-            : "border-gray-200 bg-white hover:border-[#111111]"
-        }`}
+        className={`w-full border p-2 text-left transition-all duration-100 flex flex-col gap-1 cursor-pointer relative group ${borderStyles}`}
       >
-        <div className="flex justify-between items-center w-full">
-          <span className="font-mono text-xs font-bold text-[#111111] truncate max-w-[170px] flex items-center gap-1">
+        {isDeadlocked && (
+          <div className="bg-[#E11D48] text-white font-mono text-[8px] font-bold px-1.5 py-0.5 uppercase tracking-wider mb-1 flex items-center justify-between animate-pulse">
+            <span>[!] HARD DEADLOCK HALT</span>
+            <span>MANUAL OVERRIDE REQ</span>
+          </div>
+        )}
+        {isAwaitingHuman && (
+          <div className="bg-amber-500 text-amber-950 font-mono text-[8px] font-bold px-1.5 py-0.5 uppercase tracking-wider mb-1 flex items-center justify-between border border-amber-600 animate-pulse">
+            <span>[!] HITL INTERCEPT REQ</span>
+            <span>MANUAL INPUT</span>
+          </div>
+        )}
+        <div className="flex justify-between items-center w-full relative">
+          <span className="font-mono text-xs font-bold text-[#111111] truncate max-w-[150px] flex items-center gap-1">
             <span className="text-gray-400 font-normal">#</span>
             {formattedName}
+            {typingDeals[d.id] && (
+              <span className="text-rose-600 animate-pulse text-[9px] font-normal font-mono shrink-0 ml-1">
+                (typing...)
+              </span>
+            )}
           </span>
-          <span className={`font-mono text-[7px] font-bold px-1.5 py-0.2 border ${
-            d.status === "ACTIVE" 
-              ? "border-[#111111] bg-white text-[#111111]" 
-              : d.status === "MATCHED"
-              ? "border-emerald-600 bg-emerald-50 text-emerald-800"
-              : d.status === "DEADLOCK"
-              ? "border-red-600 bg-red-50 text-red-800"
-              : "border-gray-500 bg-gray-50 text-gray-700"
-          }`}>
-            {d.status}
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className={`font-mono text-[7px] font-bold px-1.5 py-0.2 border ${
+              d.status === "ACTIVE" 
+                ? "border-[#111111] bg-white text-[#111111]" 
+                : d.status === "MATCHED"
+                ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                : d.status === "DEADLOCK"
+                ? "border-red-600 bg-red-50 text-red-800"
+                : "border-gray-500 bg-gray-50 text-gray-700"
+            }`}>
+              {d.status}
+            </span>
+            
+            {/* Options button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setOpenMenuDealId(openMenuDealId === d.id ? null : d.id);
+                setConfirmDeleteDealId(null);
+              }}
+              className="p-1 hover:bg-gray-100 text-[#111111] border border-transparent hover:border-[#111111] transition-all cursor-pointer bg-white"
+            >
+              <MoreVertical className="h-3 w-3" />
+            </button>
+          </div>
         </div>
         <div className="flex justify-between items-center w-full font-mono text-[8px] text-gray-400">
           <span>BUDGET: {d.current_buyer_budget} EUR</span>
@@ -987,7 +1330,71 @@ function HomeContent() {
             {new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
-      </button>
+
+        {/* Monospace contextual dropdown menu */}
+        {openMenuDealId === d.id && (
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className="absolute right-2 top-8 z-50 border border-[#111111] bg-white p-1 text-[9px] font-mono shadow-[2px_2px_0px_rgba(17,17,17,1)] flex flex-col w-28 text-left animate-fade-in"
+          >
+            {d.is_archived ? (
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  await handleArchiveDeal(d.id, false);
+                  setOpenMenuDealId(null);
+                }}
+                className="hover:bg-gray-100 px-1.5 py-1 text-left flex items-center gap-1 cursor-pointer w-full text-gray-700 font-bold"
+              >
+                <RefreshCw className="h-2.5 w-2.5 text-gray-500" />
+                <span>UNARCHIVE</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  await handleArchiveDeal(d.id, true);
+                  setOpenMenuDealId(null);
+                }}
+                className="hover:bg-gray-100 px-1.5 py-1 text-left flex items-center gap-1 cursor-pointer w-full text-gray-700 font-bold"
+              >
+                <Archive className="h-2.5 w-2.5 text-gray-500" />
+                <span>ARCHIVE</span>
+              </button>
+            )}
+
+            {confirmDeleteDealId === d.id ? (
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  await handleDeleteDeal(d.id);
+                  setOpenMenuDealId(null);
+                  setConfirmDeleteDealId(null);
+                }}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold px-1.5 py-1 text-left flex items-center gap-1 cursor-pointer w-full border border-red-700"
+              >
+                <AlertTriangle className="h-2.5 w-2.5 text-white animate-pulse" />
+                <span>CONFIRM PURGE</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmDeleteDealId(d.id);
+                }}
+                className="hover:bg-red-50 text-red-600 px-1.5 py-1 text-left flex items-center gap-1 cursor-pointer w-full font-bold"
+              >
+                <Trash2 className="h-2.5 w-2.5 text-red-600" />
+                <span>DELETE</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -1034,6 +1441,13 @@ function HomeContent() {
               POSTGRES DATABASE: CONNECTED
             </span>
           </div>
+          <Link
+            href="/inventory"
+            className="flex items-center gap-1.5 border border-[#111111] px-3 py-1 bg-[#111111] text-white font-mono text-[10px] font-bold uppercase hover:bg-white hover:text-[#111111] transition-all duration-100"
+          >
+            <ShoppingBag className="h-3 w-3" />
+            VIEW HARDWARE CATALOG
+          </Link>
           <button 
             onClick={() => fetchDeals()}
             className="flex items-center gap-1.5 border border-[#111111] px-3 py-1 bg-white font-mono text-[10px] font-bold uppercase hover:bg-[#111111] hover:text-white transition-colors duration-100"
@@ -1043,6 +1457,52 @@ function HomeContent() {
           </button>
         </div>
       </header>
+
+      {/* GLOBAL NOTIFICATION BLINKING STRIP */}
+      {(deadlockedDeals.length > 0 || awaitingHumanDeals.length > 0) && (
+        <div className={`border-b border-[#111111] px-4 py-2 flex flex-wrap items-center justify-between gap-2 z-10 shrink-0 font-mono text-[10px] ${
+          deadlockedDeals.length > 0 
+            ? "bg-[#FFF1F2] border-rose-600 text-rose-950" 
+            : "bg-[#FFFBEB] border-amber-600 text-amber-950"
+        }`}>
+          <div className="flex items-center gap-2">
+            <span className={`inline-block h-2.5 w-2.5 shrink-0 animate-pulse ${
+              deadlockedDeals.length > 0 ? "bg-[#E11D48]" : "bg-amber-500"
+            }`}></span>
+            <span className="font-bold uppercase tracking-wider">
+              {deadlockedDeals.length > 0 
+                ? `[!] MANUAL OPERATOR COMMAND REQUIRED | ${deadlockedDeals.length} LOTS DEADLOCKED` 
+                : `[!] HUMAN-IN-THE-LOOP INTERCEPT REQUIRED | ${awaitingHumanDeals.length} DEALS PENDING YOUR OFFER`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto max-w-full">
+            {awaitingHumanDeals.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => {
+                  setActiveDealId(d.id);
+                  setShowLotForm(false);
+                }}
+                className="flex items-center gap-1 border border-amber-600 bg-amber-50 text-amber-950 px-2.5 py-0.5 font-bold uppercase hover:bg-amber-500 hover:text-white transition-all text-[9px]"
+              >
+                <span>[HITL] {d.item_name.toUpperCase()}</span>
+              </button>
+            ))}
+            {deadlockedDeals.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => {
+                  setActiveDealId(d.id);
+                  setShowLotForm(false);
+                }}
+                className="flex items-center gap-1 border border-rose-600 bg-rose-50 text-rose-950 px-2.5 py-0.5 font-bold uppercase hover:bg-[#E11D48] hover:text-white transition-all text-[9px]"
+              >
+                <span>[DEADLOCK] {d.item_name.toUpperCase()}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* THREE-COLUMN WORKSPACE CONTAINER */}
       <div className="flex-1 flex overflow-hidden w-full relative">
@@ -1259,26 +1719,26 @@ function HomeContent() {
                   <button
                     type="button"
                     onClick={() => setActiveDrawer("BUYER")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-center transition-all duration-100 cursor-pointer border-r border-[#111111] ${
+                    className={`flex-1 flex items-center justify-center gap-1 py-2 font-mono text-[8px] font-bold uppercase tracking-wider text-center transition-all duration-100 cursor-pointer border-r border-[#111111] ${
                       activeDrawer === "BUYER"
                         ? "bg-[#111111] text-white"
                         : "bg-white text-gray-500 hover:bg-white hover:text-[#111111]"
                     }`}
                   >
                     <ShoppingBag className="h-3 w-3" />
-                    <span>BUYER ({buyerDeals.length})</span>
+                    <span>BUY ({buyerDeals.length})</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveDrawer("SELLER")}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 font-mono text-[9px] font-bold uppercase tracking-wider text-center transition-all duration-100 cursor-pointer ${
+                    className={`flex-1 flex items-center justify-center gap-1 py-2 font-mono text-[8px] font-bold uppercase tracking-wider text-center transition-all duration-100 cursor-pointer ${
                       activeDrawer === "SELLER"
                         ? "bg-[#111111] text-white"
                         : "bg-white text-gray-500 hover:bg-white hover:text-[#111111]"
                     }`}
                   >
                     <Tag className="h-3 w-3" />
-                    <span>SELLER ({sellerDeals.length})</span>
+                    <span>SELL ({sellerDeals.length})</span>
                   </button>
                 </div>
 
@@ -1348,21 +1808,61 @@ function HomeContent() {
                     )}
 
                     {activeDrawer === "BUYER" ? (
-                      buyerDeals.length === 0 ? (
-                        <div className="p-4 text-center font-mono text-[9px] text-gray-400 italic">
-                          NO ACTIVE BUYER CHANNELS
-                        </div>
-                      ) : (
-                        buyerDeals.map((d) => renderDealChannel(d))
-                      )
+                      <div className="space-y-1.5 w-full">
+                        {buyerDeals.length === 0 ? (
+                          <div className="p-4 text-center font-mono text-[9px] text-gray-400 italic">
+                            NO ACTIVE BUYER CHANNELS
+                          </div>
+                        ) : (
+                          buyerDeals.map((d) => renderDealChannel(d))
+                        )}
+
+                        {archivedBuyerDeals.length > 0 && (
+                          <div className="mt-4 border-t border-dashed border-gray-300 pt-2 shrink-0 w-full">
+                            <button
+                              type="button"
+                              onClick={() => setShowArchivedBuyer(!showArchivedBuyer)}
+                              className="w-full flex justify-between items-center px-1.5 py-1 text-left font-mono text-[8px] font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-50 hover:text-[#111111] transition-all cursor-pointer border border-transparent hover:border-[#111111]"
+                            >
+                              <span>{showArchivedBuyer ? "[-] Hide Archived" : "[+] Show Archived"} ({archivedBuyerDeals.length})</span>
+                              {showArchivedBuyer ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                            </button>
+                            {showArchivedBuyer && (
+                              <div className="space-y-1.5 mt-1.5 pl-1 border-l border-[#111111]">
+                                {archivedBuyerDeals.map((d) => renderDealChannel(d))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                      sellerDeals.length === 0 ? (
-                        <div className="p-4 text-center font-mono text-[9px] text-gray-400 italic">
-                          NO ACTIVE SELLER CHANNELS
-                        </div>
-                      ) : (
-                        sellerDeals.map((d) => renderDealChannel(d))
-                      )
+                      <div className="space-y-1.5 w-full">
+                        {sellerDeals.length === 0 ? (
+                          <div className="p-4 text-center font-mono text-[9px] text-gray-400 italic">
+                            NO ACTIVE SELLER CHANNELS
+                          </div>
+                        ) : (
+                          sellerDeals.map((d) => renderDealChannel(d))
+                        )}
+
+                        {archivedSellerDeals.length > 0 && (
+                          <div className="mt-4 border-t border-dashed border-gray-300 pt-2 shrink-0 w-full">
+                            <button
+                              type="button"
+                              onClick={() => setShowArchivedSeller(!showArchivedSeller)}
+                              className="w-full flex justify-between items-center px-1.5 py-1 text-left font-mono text-[8px] font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-50 hover:text-[#111111] transition-all cursor-pointer border border-transparent hover:border-[#111111]"
+                            >
+                              <span>{showArchivedSeller ? "[-] Hide Archived" : "[+] Show Archived"} ({archivedSellerDeals.length})</span>
+                              {showArchivedSeller ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                            </button>
+                            {showArchivedSeller && (
+                              <div className="space-y-1.5 mt-1.5 pl-1 border-l border-[#111111]">
+                                {archivedSellerDeals.map((d) => renderDealChannel(d))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1602,13 +2102,178 @@ function HomeContent() {
                     </p>
                   </div>
                 )}
+                {activeDeal?.status === "DEADLOCK" && (
+                  <div className="border border-[#E11D48] bg-[#FFF1F2] p-4 text-left font-mono my-3 flex flex-col gap-3 animate-fade-in shadow-[2px_2px_0px_rgba(225,29,72,1)] rounded-none">
+                    <div className="flex items-center gap-2 border-b border-[#E11D48] pb-2 text-[#E11D48]">
+                      <AlertTriangle className="h-4 w-4 shrink-0 animate-bounce" />
+                      <span className="text-[11px] font-bold tracking-wide uppercase">[!] MULTI-PARTY SETTLEMENT DEADLOCK HALT</span>
+                    </div>
+                    <p className="text-[10px] leading-relaxed text-[#9F1239]">
+                      Calculations have stalled. All Buyers have hit their maximum authorized budget caps, and all Sellers have reached their absolute floor price thresholds. No overlapping agreement window exists. Autonomous trade calculation has been suspended until an authorized operator issues a command override.
+                    </p>
+                    <div className="bg-[#FFE4E6] p-2.5 border border-[#FDA4AF] text-[9.5px]">
+                      <span className="font-bold text-[#E11D48] uppercase block mb-1">OPERATOR CONTROL PROTOCOL INSTRUCTIONS:</span>
+                      <ul className="list-disc pl-4 space-y-1 text-[#9F1239]">
+                        <li>Type <strong className="font-bold text-[#BE123C]">"approve"</strong> below to authorize a <strong className="font-bold text-[#BE123C]">+100 EUR budget expansion</strong>. This raises all Buyer budget ceilings and reactivates the trade engine.</li>
+                        <li>Type <strong className="font-bold text-[#BE123C]">"terminate"</strong> below to forcefully cancel and close this deal channel forever.</li>
+                        <li>Type any message containing a price point (e.g. <strong className="font-bold text-[#BE123C]">"1200 EUR"</strong>) to inject a manual pricing offer on behalf of your perspective.</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+                {activeDeal && isWaitingForHuman(activeDeal) && (
+                  <div className="border border-amber-500 bg-[#FFFBEB] p-4 text-left font-mono my-3 flex flex-col gap-3 animate-fade-in shadow-[2px_2px_0px_rgba(245,158,11,1)] rounded-none">
+                    <div className="flex items-center gap-2 border-b border-amber-500 pb-2 text-amber-700">
+                      <Terminal className="h-4 w-4 shrink-0 animate-pulse" />
+                      <span className="text-[11px] font-bold tracking-wide uppercase">[!] HUMAN-IN-THE-LOOP INTERCEPT REQUIRED</span>
+                    </div>
+                    <p className="text-[10px] leading-relaxed text-amber-900">
+                      The automated trading system has paused to let you steer the negotiation. As the <strong className="font-bold text-amber-950">{activeDeal.perspective === "BUYER" ? "BUYER" : "SELLER"}</strong>, you are currently holding the turn. The counterparty agent is awaiting your pricing or specifications directive.
+                    </p>
+                    <div className="bg-[#FEF3C7] p-2.5 border border-amber-300 text-[9.5px]">
+                      <span className="font-bold text-amber-800 uppercase block mb-1">TACTICAL INTERACTION OPTIONS:</span>
+                      <ul className="list-disc pl-4 space-y-1 text-amber-900">
+                        <li>Use the **Tactical Cognitive Response Board** below to quick-send pre-formulated tactical concessions.</li>
+                        <li>Type your custom counter-offer price (e.g. <strong className="font-bold text-amber-950">"1100 EUR"</strong>) in the free-text input and press Send.</li>
+                        <li>Type <strong className="font-bold text-amber-950">"terminate"</strong> below if you wish to forcefully abort the negotiation.</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
                 <div ref={chatEndRef} />
               </div>
 
               {/* BOTTOM TERMINAL OVERRIDE & STEP BAR */}
               <div className="border-t border-[#111111] bg-white p-3 shrink-0">
-                {activeDeal ? (
+                {activeDeal && (
                   <div className="flex flex-col gap-2">
+                      
+                      {/* STRATEGIC COGNITIVE RESPONSE BOARD */}
+                      <div className="border border-[#111111] bg-white transition-all duration-150">
+                        {/* Header */}
+                        <div 
+                          onClick={() => setIsStrategicBoardOpen(!isStrategicBoardOpen)}
+                          className="flex justify-between items-center px-3 py-1.5 bg-gray-50 border-b border-[#111111] cursor-pointer hover:bg-gray-100 select-none"
+                        >
+                          <div className="flex items-center gap-1.5 font-mono text-[9px] font-bold text-[#111111]">
+                            <BrainCircuit className="h-3 w-3 text-rose-600 animate-pulse" />
+                            <span>TACTICAL COGNITIVE RESPONSE BOARD</span>
+                          </div>
+                          <span className="font-mono text-[8px] text-gray-500 font-bold">
+                            {isStrategicBoardOpen ? "[-] HIDE BOARD" : "[+] EXPAND BOARD"}
+                          </span>
+                        </div>
+
+                        {isStrategicBoardOpen && (
+                          <div className="p-2 grid grid-cols-1 md:grid-cols-4 gap-2 bg-white text-[10px]">
+                            {hasHumanParticipant ? (
+                              <>
+                                {/* Group 1: Settlement & Alignment */}
+                                <div className="flex flex-col gap-1 border border-dashed border-gray-200 p-1.5">
+                                  <span className="font-mono text-[7.5px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5 border-b border-gray-100 pb-0.5">
+                                    [01] Settle & Stand Firm
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSendPreset(agreePreset.text)}
+                                    disabled={isHaltedOrFinished}
+                                    title={agreePreset.tooltip}
+                                    className="w-full text-left font-mono text-[8.5px] font-bold py-0.5 px-1 border border-[#111111] bg-white hover:bg-gray-100 text-[#111111] truncate transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  >
+                                    {agreePreset.label}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSendPreset(standFirmPreset.text)}
+                                    disabled={isHaltedOrFinished}
+                                    title={standFirmPreset.tooltip}
+                                    className="w-full text-left font-mono text-[8.5px] font-bold py-0.5 px-1 border border-[#111111] bg-white hover:bg-gray-100 text-[#111111] truncate transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  >
+                                    {standFirmPreset.label}
+                                  </button>
+                                </div>
+
+                                {/* Group 2: Distributive Leverage */}
+                                <div className="flex flex-col gap-1 border border-dashed border-gray-200 p-1.5">
+                                  <span className="font-mono text-[7.5px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5 border-b border-gray-100 pb-0.5">
+                                    [02] Concession Leverage
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSendPreset(concessionPreset.text)}
+                                    disabled={isHaltedOrFinished}
+                                    title={concessionPreset.tooltip}
+                                    className="w-full text-left font-mono text-[8.5px] font-bold py-0.5 px-1 border border-[#111111] bg-white hover:bg-gray-100 text-[#111111] truncate transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  >
+                                    {concessionPreset.label}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSendPreset(extremePreset.text)}
+                                    disabled={isHaltedOrFinished}
+                                    title={extremePreset.tooltip}
+                                    className="w-full text-left font-mono text-[8.5px] font-bold py-0.5 px-1 border border-[#111111] bg-white hover:bg-gray-100 text-[#111111] truncate transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  >
+                                    {extremePreset.label}
+                                  </button>
+                                </div>
+
+                                {/* Group 3: Integrative TCO Trades */}
+                                <div className="flex flex-col gap-1 border border-dashed border-gray-200 p-1.5">
+                                  <span className="font-mono text-[7.5px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5 border-b border-gray-100 pb-0.5">
+                                    [03] Integrative TCO Trades
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSendPreset(tcoCompromisePreset.text)}
+                                    disabled={isHaltedOrFinished}
+                                    title={tcoCompromisePreset.tooltip}
+                                    className="w-full text-left font-mono text-[8.5px] font-bold py-0.5 px-1 border border-[#111111] bg-white hover:bg-gray-100 text-[#111111] truncate transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  >
+                                    {tcoCompromisePreset.label}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSendPreset(slaPremiumPreset.text)}
+                                    disabled={isHaltedOrFinished}
+                                    title={slaPremiumPreset.tooltip}
+                                    className="w-full text-left font-mono text-[8.5px] font-bold py-0.5 px-1 border border-[#111111] bg-white hover:bg-gray-100 text-[#111111] truncate transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                  >
+                                    {slaPremiumPreset.label}
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="md:col-span-3 flex items-center justify-center border border-dashed border-gray-200 p-3 text-gray-400 font-mono text-[8.5px] uppercase">
+                                Autonomous simulation lane: Conversational presets inactive.
+                              </div>
+                            )}
+
+                            {/* Group 4: Administrative Control */}
+                            <div className="flex flex-col gap-1 border border-dashed border-gray-200 p-1.5">
+                              <span className="font-mono text-[7.5px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5 border-b border-gray-100 pb-0.5">
+                                [04] Admin Overrides
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleSendPreset("approve")}
+                                disabled={activeDeal.status === "TERMINATED" || activeDeal.status === "MATCHED"}
+                                className="w-full text-left font-mono text-[8.5px] font-bold py-0.5 px-1 border border-[#E11D48] bg-white hover:bg-[#FFE4E6] text-[#E11D48] truncate transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                BUMP BUDGET (+100)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSendPreset("terminate")}
+                                disabled={activeDeal.status === "TERMINATED" || activeDeal.status === "MATCHED"}
+                                className="w-full text-left font-mono text-[8.5px] font-bold py-0.5 px-1 border border-[#111111] bg-white hover:bg-gray-100 text-[#111111] truncate transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                HALT & TERMINATE
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     
                     {/* INSTRUCTION TIPS SUB-BAR */}
                     <div className="flex justify-between items-center px-1">
@@ -1631,9 +2296,27 @@ function HomeContent() {
                     <div className="flex gap-2 items-stretch">
                       
                       {/* DIRECT OVERRIDE FORM LINE */}
-                      <form onSubmit={handleSendOperatorMessage} className="flex-1 flex border border-[#111111]">
-                        <div className="bg-white border-r border-[#111111] px-3 flex items-center">
-                          <Terminal className="h-3.5 w-3.5 text-gray-500" />
+                      <form onSubmit={handleSendOperatorMessage} className={`flex-1 flex border transition-all duration-150 ${
+                        activeDeal.status === "DEADLOCK" 
+                          ? "border-[#E11D48] shadow-[0_0_8px_rgba(225,29,72,0.15)] bg-[#FFF1F2]" 
+                          : isWaitingForHuman(activeDeal)
+                          ? "border-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.15)] bg-[#FFFBEB]"
+                          : "border-[#111111]"
+                      }`}>
+                        <div className={`border-r px-3 flex items-center transition-colors duration-150 ${
+                          activeDeal.status === "DEADLOCK" 
+                            ? "border-[#E11D48] bg-[#FFF1F2]" 
+                            : isWaitingForHuman(activeDeal)
+                            ? "border-amber-500 bg-[#FFFBEB]"
+                            : "border-[#111111] bg-white"
+                        }`}>
+                          <Terminal className={`h-3.5 w-3.5 transition-colors duration-150 ${
+                            activeDeal.status === "DEADLOCK" 
+                              ? "text-[#E11D48]" 
+                              : isWaitingForHuman(activeDeal)
+                              ? "text-amber-600"
+                              : "text-gray-500"
+                          }`} />
                         </div>
                         <input
                           type="text"
@@ -1643,16 +2326,32 @@ function HomeContent() {
                               ? "DEAL SETTLED. COMMENCING ESCROW."
                               : activeDeal.status === "TERMINATED"
                               ? "POOL FORCEFULLY TERMINATED."
+                              : activeDeal.status === "DEADLOCK"
+                              ? "ENGINE HALTED. COMMAND OVERRIDE PROTOCOL ACTIVATED: TYPE 'approve'..."
+                              : isWaitingForHuman(activeDeal)
+                              ? "HUMAN TURN: TYPE PRICE / DIRECTIVE (e.g. '1200 EUR') or TYPE 'terminate'..."
                               : "INJECT DIRECT OVERRIDE MESSAGE COMMAND OR TYPE 'approve'..."
                           }
                           value={operatorMsg}
                           onChange={(e) => setOperatorMessage(e.target.value)}
-                          className="flex-1 px-3 py-2.5 font-mono text-xs uppercase bg-white focus:outline-none focus:bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          className={`flex-1 px-3 py-2.5 font-mono text-xs uppercase focus:outline-none disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors duration-150 ${
+                            activeDeal.status === "DEADLOCK" 
+                              ? "bg-[#FFF1F2] text-[#9F1239] placeholder-[#FDA4AF]" 
+                              : isWaitingForHuman(activeDeal)
+                              ? "bg-[#FFFBEB] text-amber-900 placeholder-amber-400"
+                              : "bg-white text-[#111111]"
+                          }`}
                         />
                         <button
                           type="submit"
                           disabled={!operatorMsg.trim() || activeDeal.status === "TERMINATED" || activeDeal.status === "MATCHED"}
-                          className="bg-white hover:bg-gray-100 border-l border-[#111111] px-4 font-mono text-xs font-bold uppercase text-[#111111] transition-colors duration-100 disabled:opacity-50"
+                          className={`border-l px-4 font-mono text-xs font-bold uppercase transition-all duration-100 disabled:opacity-50 flex items-center ${
+                            activeDeal.status === "DEADLOCK" 
+                              ? "border-[#E11D48] bg-[#FFF1F2] hover:bg-[#FFE4E6] text-[#E11D48]" 
+                              : isWaitingForHuman(activeDeal)
+                              ? "border-amber-500 bg-[#FFFBEB] hover:bg-[#FEF3C7] text-amber-700"
+                              : "border-[#111111] bg-white hover:bg-gray-100 text-[#111111]"
+                          }`}
                         >
                           <Send className="h-3.5 w-3.5" />
                         </button>
@@ -1660,19 +2359,41 @@ function HomeContent() {
 
                       {/* AUTO-NEGOTIATING ENGINE STATUS CHIP */}
                       <div
-                        className={`px-5 py-2.5 font-mono text-xs font-bold uppercase border border-[#111111] flex items-center gap-2 select-none ${
+                        className={`px-5 py-2.5 font-mono text-xs font-bold uppercase border flex items-center gap-2 select-none transition-all duration-150 ${
                           activeDeal.status === "ACTIVE" 
-                            ? "bg-slate-50 text-[#111111] shadow-[2px_2px_0px_rgba(17,17,17,1)]" 
+                            ? isWaitingForHuman(activeDeal)
+                              ? "border-amber-500 bg-amber-500 text-amber-950 shadow-[2px_2px_0px_rgba(245,158,11,1)]"
+                              : "border-[#111111] bg-slate-50 text-[#111111] shadow-[2px_2px_0px_rgba(17,17,17,1)]" 
+                            : activeDeal.status === "DEADLOCK"
+                            ? "border-[#E11D48] bg-[#E11D48] text-white shadow-[2px_2px_0px_rgba(225,29,72,1)]"
                             : "bg-gray-100 border-gray-300 text-gray-400"
                         }`}
                       >
                         {activeDeal.status === "ACTIVE" ? (
+                          isWaitingForHuman(activeDeal) ? (
+                            <>
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full bg-amber-200 opacity-75"></span>
+                                <span className="relative inline-flex h-2 w-2 bg-amber-950"></span>
+                              </span>
+                              <span>WAITING FOR YOU</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex h-2 w-2 bg-emerald-500"></span>
+                              </span>
+                              <span>AUTO-NEGOTIATING</span>
+                            </>
+                          )
+                        ) : activeDeal.status === "DEADLOCK" ? (
                           <>
                             <span className="relative flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full bg-emerald-400 opacity-75"></span>
-                              <span className="relative inline-flex h-2 w-2 bg-emerald-500"></span>
+                              <span className="animate-ping absolute inline-flex h-full w-full bg-rose-200 opacity-75"></span>
+                              <span className="relative inline-flex h-2 w-2 bg-white"></span>
                             </span>
-                            <span>AUTO-NEGOTIATING</span>
+                            <span className="animate-pulse">ENGINE HALTED</span>
                           </>
                         ) : (
                           <>
@@ -1681,10 +2402,9 @@ function HomeContent() {
                           </>
                         )}
                       </div>
-
                     </div>
                   </div>
-                ) : null}
+                )}
               </div>
             </>
 
@@ -1765,27 +2485,27 @@ function HomeContent() {
                     <tr className="border-b border-gray-200">
                       <td className="p-1 text-left">RAW MATERIALS</td>
                       <td className="p-1 text-right">45%</td>
-                      <td className="p-1 text-right font-bold text-gray-900">{(activeDeal.current_buyer_budget * 0.45).toFixed(1)} EUR</td>
+                      <td className="p-1 text-right font-bold text-gray-900">{((activeDeal?.current_buyer_budget || 0) * 0.45).toFixed(1)} EUR</td>
                     </tr>
                     <tr className="border-b border-gray-200">
                       <td className="p-1 text-left">LABOR & OVERHEAD</td>
                       <td className="p-1 text-right">25%</td>
-                      <td className="p-1 text-right font-bold text-gray-900">{(activeDeal.current_buyer_budget * 0.25).toFixed(1)} EUR</td>
+                      <td className="p-1 text-right font-bold text-gray-900">{((activeDeal?.current_buyer_budget || 0) * 0.25).toFixed(1)} EUR</td>
                     </tr>
                     <tr className="border-b border-gray-200">
                       <td className="p-1 text-left">LOGISTICS & DUTY</td>
                       <td className="p-1 text-right">10%</td>
-                      <td className="p-1 text-right font-bold text-gray-900">{(activeDeal.current_buyer_budget * 0.10).toFixed(1)} EUR</td>
+                      <td className="p-1 text-right font-bold text-gray-900">{((activeDeal?.current_buyer_budget || 0) * 0.10).toFixed(1)} EUR</td>
                     </tr>
                     <tr className="border-b border-gray-200">
                       <td className="p-1 text-left">SUPPLIER MARGIN</td>
                       <td className="p-1 text-right">15%</td>
-                      <td className="p-1 text-right font-bold text-gray-900">{(activeDeal.current_buyer_budget * 0.15).toFixed(1)} EUR</td>
+                      <td className="p-1 text-right font-bold text-gray-900">{((activeDeal?.current_buyer_budget || 0) * 0.15).toFixed(1)} EUR</td>
                     </tr>
                     <tr className="bg-gray-50 border-t border-gray-300">
                       <td className="p-1 text-left font-bold text-[#111111]">FAIR TARGET VALUE</td>
                       <td className="p-1 text-right font-bold">95%</td>
-                      <td className="p-1 text-right font-bold text-[#111111]">{(activeDeal.current_buyer_budget * 0.95).toFixed(1)} EUR</td>
+                      <td className="p-1 text-right font-bold text-[#111111]">{((activeDeal?.current_buyer_budget || 0) * 0.95).toFixed(1)} EUR</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1795,7 +2515,7 @@ function HomeContent() {
                   <div className="flex justify-between">
                     <span>BATNA THRESHOLD:</span>
                     <span className="font-bold text-gray-800 select-all">
-                      {activeDeal.current_buyer_budget} EUR
+                      {activeDeal?.current_buyer_budget || 0} EUR
                     </span>
                   </div>
                   <div className="flex justify-between items-start">

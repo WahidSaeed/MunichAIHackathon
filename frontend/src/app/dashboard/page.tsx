@@ -45,9 +45,11 @@ interface Deal {
   technical_specs: string | null;
   perspective: string | null;
   negotiation_style: string;
+  is_archived: boolean;
   created_at: string;
   participants: Participant[];
   messages: Message[];
+  confidence_score?: number;
 }
 
 export default function DashboardPage() {
@@ -80,9 +82,14 @@ export default function DashboardPage() {
       if (res.ok) {
         const data = await res.json();
         setDeals(data);
-        // Default select the first deal if none selected
+        // Default select the first active deal if none selected
         if (data.length > 0 && !selectedDealId) {
-          setSelectedDealId(data[0].id);
+          const activeOnly = data.filter((d: Deal) => !d.is_archived);
+          if (activeOnly.length > 0) {
+            setSelectedDealId(activeOnly[0].id);
+          } else {
+            setSelectedDealId(data[0].id);
+          }
         }
       }
     } catch (err) {
@@ -108,12 +115,13 @@ export default function DashboardPage() {
 
   // Get active selected deal details
   const selectedDeal = useMemo(() => {
-    return deals.find(d => d.id === selectedDealId) || deals[0] || null;
+    const activeDeals = deals.filter(d => !d.is_archived);
+    return deals.find(d => d.id === selectedDealId) || activeDeals[0] || deals[0] || null;
   }, [deals, selectedDealId]);
 
   // Filter and Sort Ledger Data
   const filteredAndSortedDeals = useMemo(() => {
-    let result = [...deals];
+    let result = deals.filter(d => !d.is_archived);
 
     // Search query filter
     if (searchQuery.trim() !== "") {
@@ -280,7 +288,7 @@ export default function DashboardPage() {
     const parsedAsks: { round: number; price: number }[] = [];
 
     // Parse chronologically from messages
-    selectedDeal.messages.forEach(msg => {
+    (selectedDeal?.messages || []).forEach(msg => {
       const match = msg.message_text.match(/\[Offer:\s*(\d+)\s*EUR/);
       if (match) {
         const price = parseInt(match[1]);
@@ -297,14 +305,14 @@ export default function DashboardPage() {
 
     // Fallback Mock Timeline (highly accurate, dynamic based on selected lot thresholds)
     if (parsedBids.length === 0 && parsedAsks.length === 0) {
-      const cap = selectedDeal.current_buyer_budget || 1500;
-      const totalR = selectedDeal.status === "MATCHED" ? 6 : 4;
+      const cap = selectedDeal?.current_buyer_budget || 1500;
+      const totalR = selectedDeal?.status === "MATCHED" ? 6 : 4;
       const startB = Math.round(cap * 0.72);
-      const endB = selectedDeal.status === "MATCHED" 
+      const endB = selectedDeal?.status === "MATCHED" 
         ? Math.round(cap * 0.92) 
         : Math.round(cap * 0.82);
       const startS = Math.round(cap * 1.18);
-      const endS = selectedDeal.status === "MATCHED" 
+      const endS = selectedDeal?.status === "MATCHED" 
         ? Math.round(cap * 0.92) 
         : Math.round(cap * 1.05);
 
@@ -391,11 +399,11 @@ export default function DashboardPage() {
   // 5. SCATTER CHART CALCULATIONS: Speed vs Margin Capture
   const scatterPoints = useMemo(() => {
     return deals.map((d, index) => {
-      const speed = Math.min(d.messages.length || 4, 18);
+      const speed = Math.min(d.messages?.length || 4, 18);
       let marginCapture = 0;
       const budget = d.current_buyer_budget || 1500;
       
-      const settlePart = d.participants.find(p => p.role === "BUYER");
+      const settlePart = (d.participants || []).find(p => p.role === "BUYER");
       const currentBid = settlePart?.current_price_point || budget * 0.8;
       
       if (d.status === "MATCHED") {
@@ -1147,8 +1155,8 @@ export default function DashboardPage() {
                   filteredAndSortedDeals.map((item) => {
                     const isSelected = selectedDealId === item.id;
                     
-                    const buyerPart = item.participants.find(p => p.role === "BUYER");
-                    const sellerPart = item.participants.find(p => p.role === "SELLER");
+                    const buyerPart = (item.participants || []).find(p => p.role === "BUYER");
+                    const sellerPart = (item.participants || []).find(p => p.role === "SELLER");
                     const bidVal = buyerPart?.current_price_point || 0;
                     const askVal = sellerPart?.current_price_point || 0;
                     const limitVal = item.current_buyer_budget || 0;
@@ -1191,7 +1199,7 @@ export default function DashboardPage() {
                           {spreadVal <= 0 ? "SETTLED" : `€${spreadVal.toLocaleString()}`}
                         </td>
                         <td className="p-3 text-right text-gray-600 font-mono">
-                          {item.messages.length} rounds
+                          {(item.messages || []).length} rounds
                         </td>
                         <td className="p-3 text-center">
                           <span className={`px-1.5 py-0.5 border text-[8.5px] font-bold ${

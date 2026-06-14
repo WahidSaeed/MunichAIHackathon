@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from .database import engine, Base, get_db
-from .models import Deal, Participant, Message
+from .models import Deal, Participant, Message, InventoryItem
 from .agents import (
     run_market_intelligence,
     generate_agent_turn,
@@ -48,6 +48,7 @@ class DealCreateRequest(BaseModel):
     item_name: str
     current_buyer_budget: Optional[int] = 1200
     perspective: Optional[str] = "BUYER" # BUYER or SELLER
+    image_url: Optional[str] = None
 
 class NegotiateStepRequest(BaseModel):
     deal_id: str
@@ -127,6 +128,9 @@ def list_deals(db: Session = Depends(get_db)):
             "technical_specs": d.technical_specs,
             "perspective": d.perspective,
             "negotiation_style": d.negotiation_style,
+            "is_archived": d.is_archived,
+            "image_url": d.image_url,
+            "confidence_score": d.confidence_score,
             "created_at": d.created_at,
             "participants": [{
                 "id": str(p.id),
@@ -144,6 +148,60 @@ def list_deals(db: Session = Depends(get_db)):
             } for m in msgs]
         })
     return result
+
+@app.get("/api/inventory")
+def list_inventory(db: Session = Depends(get_db)):
+    """
+    Fetches all inventory items from the new 'inventory' table.
+    """
+    items = db.query(InventoryItem).order_by(InventoryItem.category.asc(), InventoryItem.item_name.asc()).all()
+    return [{
+        "id": str(item.id),
+        "item_name": item.item_name,
+        "b2b_code": item.b2b_code,
+        "min_price": item.min_price,
+        "max_price": item.max_price,
+        "technical_specs": item.technical_specs,
+        "image_path": item.image_path,
+        "category": item.category
+    } for item in items]
+
+@app.put("/api/deals/{deal_id}/archive")
+def archive_deal(deal_id: str, is_archived: bool, db: Session = Depends(get_db)):
+    """
+    Archives or unarchives a deal, toggling its visibility in active sidebar folders.
+    """
+    try:
+        deal_uuid = uuid.UUID(deal_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Deal UUID format")
+
+    deal = db.query(Deal).filter(Deal.id == deal_uuid).first()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    deal.is_archived = is_archived
+    db.commit()
+    return {"status": "SUCCESS", "deal_id": str(deal_id), "is_archived": is_archived}
+
+@app.delete("/api/deals/{deal_id}")
+def delete_deal(deal_id: str, db: Session = Depends(get_db)):
+    """
+    Permanently deletes a deal environment, purging its ledger and message timeline.
+    """
+    try:
+        deal_uuid = uuid.UUID(deal_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid Deal UUID format")
+
+    deal = db.query(Deal).filter(Deal.id == deal_uuid).first()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    db.delete(deal)
+    db.commit()
+    return {"status": "SUCCESS", "deal_id": str(deal_id)}
+
 
 @app.post("/api/deals/create")
 def create_deal(payload: DealCreateRequest, db: Session = Depends(get_db)):
@@ -165,7 +223,8 @@ def create_deal(payload: DealCreateRequest, db: Session = Depends(get_db)):
         current_buyer_budget=payload.current_buyer_budget,
         technical_specs=intel_report,
         perspective=perspective,
-        negotiation_style="DISTRIBUTIVE"
+        negotiation_style="DISTRIBUTIVE",
+        image_url=payload.image_url
     )
     db.add(new_deal)
     
@@ -337,7 +396,8 @@ def ingest_deal(payload: DealIngestRequest, db: Session = Depends(get_db)):
         current_buyer_budget=budget_cap,
         technical_specs=combined_specs,
         perspective="BUYER",
-        negotiation_style="DISTRIBUTIVE"
+        negotiation_style="DISTRIBUTIVE",
+        image_url=raw_text if is_image else None
     )
     db.add(new_deal)
     
@@ -562,11 +622,10 @@ def negotiate_step(payload: NegotiateStepRequest, db: Session = Depends(get_db))
         if deal.status != "ACTIVE":
             break
             
-        # Bypass AI turn calculation for the active human role
-        if deal.perspective == "BUYER" and p.role == "BUYER":
-            continue
-        if deal.perspective == "SELLER" and p.role == "SELLER":
-            continue
+        # Bypass AI turn calculation for active human participants *only* if confidence score is low (< 0.8)
+        if "(You)" in p.name:
+            if deal.confidence_score is not None and deal.confidence_score < 0.8:
+                continue
             
         turn_data = generate_agent_turn(
             participant_name=p.name,
@@ -580,6 +639,10 @@ def negotiate_step(payload: NegotiateStepRequest, db: Session = Depends(get_db))
         
         # Save positions to participant ledger
         p.current_price_point = turn_data["price_point"]
+        
+        # Update confidence score on the deal
+        if "confidence_score" in turn_data:
+            deal.confidence_score = turn_data["confidence_score"]
         
         price_point = turn_data.get("price_point", p.current_price_point)
         warranty = turn_data.get("proposed_warranty_years", 1)
@@ -630,6 +693,15 @@ def negotiate_step(payload: NegotiateStepRequest, db: Session = Depends(get_db))
     highest_bid = highest_bidder.current_price_point
     lowest_ask = lowest_seller.current_price_point
     
+    has_human = any("(You)" in p.name for p in participants)
+    # Count the active agent-to-agent and operator messages
+    agent_messages = db.query(Message).filter(Message.deal_id == deal_uuid, Message.role.in_(["BUYER", "SELLER", "OPERATOR"])).all()
+    agent_message_count = len(agent_messages)
+    
+    # All simulations (both fully-automated and human-in-the-loop) must reach at least 10 dialogues before settling or deadlocking
+    if agent_message_count < 10:
+        return {"status": "ACTIVE", "deal_status": deal.status}
+        
     # A. Match Condition: Highest Bid >= Lowest Ask
     if highest_bid >= lowest_ask:
         matched_price = lowest_ask # cross-match deal settles at the seller's asking price
@@ -726,6 +798,9 @@ def operator_message(payload: OperatorMessageRequest, db: Session = Depends(get_
         sender_name = "Seller (You)"
         role = "SELLER"
         
+    # Reset confidence score on operator manual intervention
+    deal.confidence_score = 1.0
+
     # Log Operator interaction
     op_msg = Message(
         id=uuid.uuid4(),

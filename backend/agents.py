@@ -154,13 +154,24 @@ def run_group_agent_turn(
     Under DISTRIBUTIVE styling: Focuses strictly on maximum margin capture from the budget cap/floor, CITING COMPETITIVE UNDERCUTNING and alternative BATNAs.
     Under INTEGRATIVE styling: Enables trading TCO parameters (warranty, payment terms, delivery SLA uptime) to construct mutual value compromises when stuck.
     Returns:
-      {"message": "...", "price_point": int, "proposed_warranty_years": int, "proposed_payment_terms": "...", "proposed_sla_uptime": "..."}
+      {"message": "...", "price_point": int, "proposed_warranty_years": int, "proposed_payment_terms": "...", "proposed_sla_uptime": "...", "confidence_score": float}
     """
     system_instruction = f"""You are an automated B2B {role} Agent representing a premium industrial firm.
 Your identity/name is "{agent_name}".
 Your strict boundary condition is:
 - If you are a Buyer: Your absolute maximum budget cap is {hidden_limit} EUR. You must never offer or agree to any price above {hidden_limit} EUR.
 - If you are a Seller: Your absolute lowest floor price is {hidden_limit} EUR. You must never offer or agree to any price below {hidden_limit} EUR.
+
+=== IMPORTANT: CONCESSION PACING & DIALOGUE RULES ===
+1. To make the negotiation highly realistic, intense, and professional, you must negotiate incrementally and cautiously.
+2. DO NOT make large pricing concessions. Adjust your proposed price point by at most 1.5% to 3% of the target fair value per turn (typically 10 to 30 EUR). For example, if you are a buyer, raise your offer by 10 to 30 EUR per turn. If you are a seller, lower your ask by 10 to 30 EUR per turn.
+3. Prioritize arguing, debating, and defending your technical specifications, component tolerances, premium materials (e.g. alloys, coatings), warranties, logistics advantages, immediate dispatch, or SLA uptimes over making price concessions.
+4. The negotiation must proceed for at least 10 dialogue turns before any settlement can be reached. Keep your price adjustments tiny so that convergence is slow, professional, and intense.
+
+=== CONFIDENCE EVALUATION RULE ===
+You must output a floating-point "confidence_score" between 0.0 and 1.0 representing your current strategic confidence:
+- Maintain high confidence (0.8 to 1.0) if negotiations are moving smoothly and you are confident in making progress towards a deal within your limits.
+- Drop your confidence score below 0.8 (e.g., 0.5 to 0.7) if negotiations are stalling, price spreads are too high, the other party is refusing to budge, you are near your boundary limits with a wide gap remaining, or you require human operator guidance/budget expansion.
 
 The current technical specifications and market research for this lot are:
 {specs}
@@ -197,7 +208,8 @@ You MUST respond with a raw JSON object following this exact schema:
   "price_point": 1000,
   "proposed_warranty_years": 3,
   "proposed_payment_terms": "Net 60",
-  "proposed_sla_uptime": "99.9%"
+  "proposed_sla_uptime": "99.9%",
+  "confidence_score": 0.95
 }}
 
 Ensure that "price_point" is an integer representing your current proposed price in EUR (must respect your budget cap {hidden_limit} if Buyer, or floor price {hidden_limit} if Seller).
@@ -224,12 +236,18 @@ Output ONLY raw JSON. Do not wrap your response in markdown code blocks or backt
         except (TypeError, ValueError):
             price_val = hidden_limit
 
+        try:
+            confidence_score = float(data.get("confidence_score", 1.0))
+        except (TypeError, ValueError):
+            confidence_score = 1.0
+
         return {
             "message": data.get("message", "We need to re-evaluate our positions."),
             "price_point": price_val,
             "proposed_warranty_years": int(data.get("proposed_warranty_years", 1)),
             "proposed_payment_terms": str(data.get("proposed_payment_terms", "Net 30")),
-            "proposed_sla_uptime": str(data.get("proposed_sla_uptime", "99.0%"))
+            "proposed_sla_uptime": str(data.get("proposed_sla_uptime", "99.0%")),
+            "confidence_score": confidence_score
         }
     except Exception as err:
         print(f"Error in run_group_agent_turn: {err}")
@@ -238,7 +256,8 @@ Output ONLY raw JSON. Do not wrap your response in markdown code blocks or backt
             "price_point": hidden_limit,
             "proposed_warranty_years": 1,
             "proposed_payment_terms": "Net 30",
-            "proposed_sla_uptime": "99.0%"
+            "proposed_sla_uptime": "99.0%",
+            "confidence_score": 0.5
         }
 
 def generate_agent_turn(

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey, Boolean, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -15,6 +15,9 @@ class Deal(Base):
     technical_specs = Column(Text, nullable=True)
     perspective = Column(String(50), nullable=True) # BUYER or SELLER
     negotiation_style = Column(String(50), nullable=False, default="DISTRIBUTIVE") # DISTRIBUTIVE or INTEGRATIVE
+    is_archived = Column(Boolean, nullable=False, default=False)
+    image_url = Column(String(1024), nullable=True)
+    confidence_score = Column(Float, nullable=False, default=1.0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
@@ -44,3 +47,15 @@ class Message(Base):
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     deal = relationship("Deal", back_populates="messages")
+
+class InventoryItem(Base):
+    __tablename__ = "inventory"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    item_name = Column(String(255), nullable=False)
+    b2b_code = Column(String(100), nullable=False, unique=True)
+    min_price = Column(Integer, nullable=False)
+    max_price = Column(Integer, nullable=False)
+    technical_specs = Column(Text, nullable=True)
+    image_path = Column(String(1024), nullable=True)
+    category = Column(String(255), nullable=True)
