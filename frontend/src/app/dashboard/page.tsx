@@ -201,10 +201,10 @@ export default function DashboardPage() {
     const total = lockedVal + releasedVal + disputedVal + canceledVal;
     if (total === 0) {
       return [
-        { label: "Locked", value: 0, percent: 0.25, color: "#0ea5e9", strokeDash: "78.5 314", strokeOffset: "0" },
-        { label: "Released", value: 0, percent: 0.25, color: "#16a34a", strokeDash: "78.5 314", strokeOffset: "-78.5" },
-        { label: "Under Dispute", value: 0, percent: 0.25, color: "#dc2626", strokeDash: "78.5 314", strokeOffset: "-157.0" },
-        { label: "Canceled", value: 0, percent: 0.25, color: "#d97706", strokeDash: "78.5 314", strokeOffset: "-235.5" },
+        { label: "Locked", value: 0, percent: 0.25, color: "#111111", strokeDash: "78.5 314", strokeOffset: "0" },
+        { label: "Released", value: 0, percent: 0.25, color: "#4b5563", strokeDash: "78.5 314", strokeOffset: "-78.5" },
+        { label: "Under Dispute", value: 0, percent: 0.25, color: "#9ca3af", strokeDash: "78.5 314", strokeOffset: "-157.0" },
+        { label: "Canceled", value: 0, percent: 0.25, color: "#e5e7eb", strokeDash: "78.5 314", strokeOffset: "-235.5" },
       ];
     }
 
@@ -213,10 +213,10 @@ export default function DashboardPage() {
 
     let cumulativePercent = 0;
     return [
-      { label: "Locked (Active)", value: lockedVal, percent: lockedVal / total, color: "#0ea5e9" }, // Sky Blue
-      { label: "Released (Settled)", value: releasedVal, percent: releasedVal / total, color: "#16a34a" }, // Emerald Green
-      { label: "Disputed (Deadlock)", value: disputedVal, percent: disputedVal / total, color: "#db2777" }, // Deep Pink
-      { label: "Canceled (Terminated)", value: canceledVal, percent: canceledVal / total, color: "#ea580c" }, // Vibrant Orange
+      { label: "Locked (Active)", value: lockedVal, percent: lockedVal / total, color: "#111111" }, // Solid Black
+      { label: "Released (Settled)", value: releasedVal, percent: releasedVal / total, color: "#4b5563" }, // Charcoal
+      { label: "Disputed (Deadlock)", value: disputedVal, percent: disputedVal / total, color: "#9ca3af" }, // Slate
+      { label: "Canceled (Terminated)", value: canceledVal, percent: canceledVal / total, color: "#e5e7eb" }, // Light Silver
     ].map(item => {
       const strokeDash = `${(item.percent * circumference).toFixed(1)} ${circumference.toFixed(1)}`;
       const strokeOffset = `${(cumulativePercent * circumference).toFixed(1)}`;
@@ -231,11 +231,11 @@ export default function DashboardPage() {
 
     const cap = selectedDeal.current_buyer_budget || 1000;
     const items = [
-      { name: "Raw Materials", percent: 0.45, color: "#0284c7", value: cap * 0.45 },
-      { name: "Labor & Manufacturing", percent: 0.25, color: "#7c3aed", value: cap * 0.25 },
-      { name: "Logistics & Duties", percent: 0.10, color: "#ea580c", value: cap * 0.10 },
-      { name: "Supplier Margin Target", percent: 0.15, color: "#db2777", value: cap * 0.15 },
-      { name: "Buffer Allocation", percent: 0.05, color: "#4b5563", value: cap * 0.05 }
+      { name: "Raw Materials", percent: 0.45, color: "#111111", value: cap * 0.45 },
+      { name: "Labor & Manufacturing", percent: 0.25, color: "url(#pattern-stripes)", value: cap * 0.25 },
+      { name: "Logistics & Duties", percent: 0.10, color: "url(#pattern-dots)", value: cap * 0.10 },
+      { name: "Supplier Margin Target", percent: 0.15, color: "url(#pattern-grid)", value: cap * 0.15 },
+      { name: "Buffer Allocation", percent: 0.05, color: "url(#pattern-horizontal)", value: cap * 0.05 }
     ];
 
     // Trigonometric coordinates calculation for SVG path slices
@@ -434,6 +434,32 @@ export default function DashboardPage() {
   return (
     <main className="h-screen w-screen bg-[#fafafa] text-[#111111] flex flex-col overflow-hidden font-sans select-none antialiased">
       
+      {/* GLOBAL SVG PATTERNS & TEXTURES DEFINITIONS */}
+      <svg className="absolute w-0 h-0" width="0" height="0">
+        <defs>
+          {/* Pattern 1: Diagonal Stripes */}
+          <pattern id="pattern-stripes" width="10" height="10" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+            <rect width="10" height="10" fill="#ffffff" />
+            <line x1="0" y1="0" x2="0" y2="10" stroke="#111111" strokeWidth="2.5" />
+          </pattern>
+          {/* Pattern 2: Dotted Grid */}
+          <pattern id="pattern-dots" width="8" height="8" patternUnits="userSpaceOnUse">
+            <rect width="8" height="8" fill="#ffffff" />
+            <circle cx="4" cy="4" r="1.8" fill="#111111" />
+          </pattern>
+          {/* Pattern 3: Fine Crosshatch Grid */}
+          <pattern id="pattern-grid" width="6" height="6" patternUnits="userSpaceOnUse">
+            <rect width="6" height="6" fill="#ffffff" />
+            <path d="M 6 0 L 0 0 0 6" fill="none" stroke="#6b7280" strokeWidth="1" />
+          </pattern>
+          {/* Pattern 4: Alternating Horizontal Lines */}
+          <pattern id="pattern-horizontal" width="8" height="8" patternUnits="userSpaceOnUse">
+            <rect width="8" height="8" fill="#ffffff" />
+            <line x1="0" y1="0" x2="8" y2="0" stroke="#111111" strokeWidth="1.5" />
+          </pattern>
+        </defs>
+      </svg>
+
       {/* HIGH-CONTRAST ATIRA HEADER */}
       <header className="h-14 border-b border-[#111111] bg-white px-4 flex items-center justify-between shrink-0 z-20">
         <div className="flex items-center gap-3">
@@ -452,7 +478,7 @@ export default function DashboardPage() {
 
         <div className="flex items-center gap-4">
           <div className="hidden lg:flex items-center gap-1.5 font-mono text-[9px] text-[#111111] uppercase border border-[#111111] bg-[#fafafa] px-2.5 py-1">
-            <span className="h-1.5 w-1.5 bg-emerald-500 rounded-none animate-pulse"></span>
+            <span className="h-1.5 w-1.5 bg-gray-800 rounded-none animate-pulse"></span>
             <span>DATA LEDGER FEED: ACTIVE</span>
           </div>
 
@@ -480,10 +506,10 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 p-4 shrink-0 bg-[#fafafa] border-b border-[#111111]">
         
         <div className="border border-[#111111] bg-white p-3 relative overflow-hidden group hover:shadow-[4px_4px_0px_rgba(17,17,17,1)] shadow-[2px_2px_0px_rgba(17,17,17,1)] transition-all">
-          <div className="absolute right-2 bottom-1 text-gray-100 group-hover:text-cyan-500/10 transition-colors pointer-events-none">
+          <div className="absolute right-2 bottom-1 text-gray-100 group-hover:text-gray-400/10 transition-colors pointer-events-none">
             <DollarSign className="h-12 w-12" />
           </div>
-          <div className="font-mono text-[8px] text-cyan-700 font-bold uppercase">TOTAL ESCROW IN-PLAY</div>
+          <div className="font-mono text-[8px] text-gray-700 font-bold uppercase">TOTAL ESCROW IN-PLAY</div>
           <div className="text-xl font-bold font-mono tracking-tight text-[#111111] mt-1">
             €{metrics.totalCap.toLocaleString()}
           </div>
@@ -493,13 +519,13 @@ export default function DashboardPage() {
         </div>
 
         <div className="border border-[#111111] bg-white p-3 relative overflow-hidden group hover:shadow-[4px_4px_0px_rgba(17,17,17,1)] shadow-[2px_2px_0px_rgba(17,17,17,1)] transition-all">
-          <div className="absolute right-2 bottom-1 text-gray-100 group-hover:text-emerald-500/10 transition-colors pointer-events-none">
+          <div className="absolute right-2 bottom-1 text-gray-100 group-hover:text-gray-400/10 transition-colors pointer-events-none">
             <TrendingUp className="h-12 w-12" />
           </div>
-          <div className="font-mono text-[8px] text-emerald-700 font-bold uppercase">NEGOTIATION ROOMS</div>
+          <div className="font-mono text-[8px] text-gray-700 font-bold uppercase">NEGOTIATION ROOMS</div>
           <div className="text-xl font-bold font-mono tracking-tight text-[#111111] mt-1 flex items-center gap-2">
             {metrics.activeRooms}
-            <span className="h-2 w-2 bg-emerald-500 rounded-none animate-ping"></span>
+            <span className="h-2 w-2 bg-gray-800 rounded-none animate-ping"></span>
           </div>
           <div className="font-mono text-[8px] text-gray-500 uppercase mt-1">
             ACTIVE BILATERAL FLUID CHANNELS
@@ -507,27 +533,27 @@ export default function DashboardPage() {
         </div>
 
         <div className="border border-[#111111] bg-white p-3 relative overflow-hidden group hover:shadow-[4px_4px_0px_rgba(17,17,17,1)] shadow-[2px_2px_0px_rgba(17,17,17,1)] transition-all">
-          <div className="absolute right-2 bottom-1 text-gray-100 group-hover:text-fuchsia-500/10 transition-colors pointer-events-none">
+          <div className="absolute right-2 bottom-1 text-gray-100 group-hover:text-gray-400/10 transition-colors pointer-events-none">
             <CheckCircle2 className="h-12 w-12" />
           </div>
-          <div className="font-mono text-[8px] text-fuchsia-700 font-bold uppercase">SETTLED CONTRACTS</div>
+          <div className="font-mono text-[8px] text-gray-700 font-bold uppercase">SETTLED CONTRACTS</div>
           <div className="text-xl font-bold font-mono tracking-tight text-[#111111] mt-1">
             {metrics.settledContracts}
           </div>
           <div className="font-mono text-[8px] text-gray-500 uppercase mt-1 flex items-center gap-1">
-            <span className="text-emerald-600 font-bold">100%</span> ESCROW VALUE RELEASED
+            <span className="text-[#111111] font-bold">100%</span> ESCROW VALUE RELEASED
           </div>
         </div>
 
         <div className="border border-[#111111] bg-white p-3 relative overflow-hidden group hover:shadow-[4px_4px_0px_rgba(17,17,17,1)] shadow-[2px_2px_0px_rgba(17,17,17,1)] transition-all">
-          <div className="absolute right-2 bottom-1 text-gray-100 group-hover:text-amber-500/10 transition-colors pointer-events-none">
+          <div className="absolute right-2 bottom-1 text-gray-100 group-hover:text-gray-400/10 transition-colors pointer-events-none">
             <AlertTriangle className="h-12 w-12" />
           </div>
-          <div className="font-mono text-[8px] text-amber-700 font-bold uppercase">DISPUTES & DEADLOCKS</div>
+          <div className="font-mono text-[8px] text-gray-700 font-bold uppercase">DISPUTES & DEADLOCKS</div>
           <div className="text-xl font-bold font-mono tracking-tight text-[#111111] mt-1 flex items-center gap-2">
             {metrics.disputedRooms}
             {metrics.disputedRooms > 0 && (
-              <span className="h-2 w-2 bg-red-500 rounded-none animate-pulse"></span>
+              <span className="h-2 w-2 bg-gray-800 rounded-none animate-pulse"></span>
             )}
           </div>
           <div className="font-mono text-[8px] text-gray-500 uppercase mt-1">
@@ -537,11 +563,11 @@ export default function DashboardPage() {
 
         <div className="col-span-2 md:col-span-1 border border-[#111111] bg-white p-3 relative overflow-hidden flex flex-col justify-between shadow-[2px_2px_0px_rgba(17,17,17,1)]">
           <div className="font-mono text-[8.5px] text-[#111111] font-bold uppercase tracking-wider flex items-center gap-1">
-            <Zap className="h-3 w-3 text-amber-500 animate-pulse" />
+            <Zap className="h-3 w-3 text-gray-800 animate-pulse" />
             <span>PIONEER TELEMETRY STATUS</span>
           </div>
           <div>
-            <div className="text-md font-bold font-mono text-emerald-600 mt-2 flex items-center gap-1.5">
+            <div className="text-md font-bold font-mono text-gray-900 mt-2 flex items-center gap-1.5">
               <span>99.42% OK</span>
             </div>
             <div className="font-mono text-[7px] text-gray-500 uppercase mt-1 font-bold">
@@ -620,7 +646,9 @@ export default function DashboardPage() {
                     >
                       <div className="flex items-center justify-between font-mono text-[9px] font-bold">
                         <div className="flex items-center gap-1.5 text-gray-700">
-                          <span className="h-2 w-2 shrink-0" style={{ backgroundColor: slice.color }}></span>
+                          <svg className="h-2.5 w-2.5 shrink-0 border border-[#111111]">
+                            <rect width="100%" height="100%" fill={slice.color} />
+                          </svg>
                           <span className="truncate uppercase text-[#111111]">{slice.label}</span>
                         </div>
                         <span className="text-[#111111] font-mono">€{slice.value.toLocaleString()}</span>
@@ -706,7 +734,9 @@ export default function DashboardPage() {
                       onMouseLeave={() => setHoveredSlice(null)}
                     >
                       <div className="flex items-center gap-1.5 truncate max-w-[130px]">
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: slice.color }}></span>
+                        <svg className="h-2.5 w-2.5 shrink-0 border border-[#111111]">
+                          <rect width="100%" height="100%" fill={slice.color} />
+                        </svg>
                         <span className="truncate uppercase text-[#111111]">{slice.name}</span>
                       </div>
                       <span className="text-[#111111] shrink-0 font-mono">
@@ -740,7 +770,7 @@ export default function DashboardPage() {
                 <div className="flex flex-col items-center group/bar cursor-pointer w-1/3">
                   <div className="relative w-full flex items-end justify-center h-[110px]">
                     <div 
-                      className="w-12 bg-[#0284c7] border-t border-cyan-400 transition-all duration-500 relative shadow-[1px_1px_0px_rgba(17,17,17,1)] group-hover/bar:bg-cyan-600"
+                      className="w-12 bg-[#111111] border border-[#111111] transition-all duration-500 relative shadow-[1px_1px_0px_rgba(17,17,17,1)] group-hover/bar:bg-gray-800"
                       style={{ height: `${barChartData.distHeight}px` }}
                     >
                       <div className="absolute -top-5 left-1/2 transform -translate-x-1/2 bg-[#111111] border border-[#111111] text-[8.5px] font-mono font-bold text-white px-1 py-0.5 opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap z-10">
@@ -748,22 +778,25 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   </div>
-                  <span className="font-mono text-[8px] font-bold text-cyan-800 uppercase mt-2">DISTRIBUTIVE</span>
+                  <span className="font-mono text-[8px] font-bold text-gray-800 uppercase mt-2">DISTRIBUTIVE</span>
                 </div>
 
                 {/* INTEGRATIVE BAR */}
                 <div className="flex flex-col items-center group/bar cursor-pointer w-1/3">
                   <div className="relative w-full flex items-end justify-center h-[110px]">
                     <div 
-                      className="w-12 bg-[#db2777] border-t border-fuchsia-400 transition-all duration-500 relative shadow-[1px_1px_0px_rgba(17,17,17,1)] group-hover/bar:bg-pink-600"
-                      style={{ height: `${barChartData.integHeight}px` }}
+                      className="w-12 border border-[#111111] transition-all duration-500 relative shadow-[1px_1px_0px_rgba(17,17,17,1)] group-hover/bar:opacity-90"
+                      style={{ 
+                        height: `${barChartData.integHeight}px`,
+                        backgroundImage: "repeating-linear-gradient(45deg, #4b5563, #4b5563 2px, #ffffff 2px, #ffffff 6px)"
+                      }}
                     >
                       <div className="absolute -top-5 left-1/2 transform -translate-x-1/2 bg-[#111111] border border-[#111111] text-[8.5px] font-mono font-bold text-white px-1 py-0.5 opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap z-10">
                         {barChartData.integrativeCount} LOTS
                       </div>
                     </div>
                   </div>
-                  <span className="font-mono text-[8px] font-bold text-fuchsia-800 uppercase mt-2">INTEGRATIVE</span>
+                  <span className="font-mono text-[8px] font-bold text-gray-800 uppercase mt-2">INTEGRATIVE</span>
                 </div>
 
                 {/* HORIZONTAL GRID BACKGROUND LINES */}
@@ -779,14 +812,14 @@ export default function DashboardPage() {
               <div className="grid grid-cols-2 gap-4 mt-2.5 pt-2 border-t border-gray-200 font-mono text-[8.5px] leading-relaxed">
                 <div>
                   <div className="text-gray-500 uppercase font-bold">DISTRIBUTIVE INDEX</div>
-                  <div className="text-xs font-bold text-cyan-700 mt-0.5">
+                  <div className="text-xs font-bold text-gray-900 mt-0.5">
                     {Math.round((barChartData.distributiveCount / (deals.length || 1)) * 100)}%
                   </div>
                   <div className="text-[7px] text-gray-500 uppercase mt-0.5">PRICE CONCESSION AGGRESSIVE</div>
                 </div>
                 <div>
                   <div className="text-gray-500 uppercase font-bold">INTEGRATIVE INDEX</div>
-                  <div className="text-xs font-bold text-fuchsia-700 mt-0.5">
+                  <div className="text-xs font-bold text-gray-900 mt-0.5">
                     {Math.round((barChartData.integrativeCount / (deals.length || 1)) * 100)}%
                   </div>
                   <div className="text-[7px] text-gray-500 uppercase mt-0.5">TCO VALUE-TRADING EXCHANGE</div>
@@ -828,15 +861,16 @@ export default function DashboardPage() {
                     {/* CONVERGENT PATHS */}
                     <polyline
                       fill="none"
-                      stroke="#0284c7"
+                      stroke="#111111"
                       strokeWidth="2.5"
                       points={lineChartData.buyerPathStr}
                       className="transition-all duration-300"
                     />
                     <polyline
                       fill="none"
-                      stroke="#db2777"
+                      stroke="#111111"
                       strokeWidth="2.5"
+                      strokeDasharray="4 4"
                       points={lineChartData.sellerPathStr}
                       className="transition-all duration-300"
                     />
@@ -849,7 +883,7 @@ export default function DashboardPage() {
                         y={p.y - 3}
                         width="6"
                         height="6"
-                        fill="#0284c7"
+                        fill="#111111"
                         stroke="#ffffff"
                         strokeWidth="1"
                         className="cursor-pointer hover:stroke-[#111111] hover:scale-125 transition-transform"
@@ -860,15 +894,14 @@ export default function DashboardPage() {
 
                     {/* SELLER DOT NODES */}
                     {lineChartData.sellerPoints.map(p => (
-                      <rect
+                      <circle
                         key={`seller-node-${p.round}`}
-                        x={p.x - 3}
-                        y={p.y - 3}
-                        width="6"
-                        height="6"
-                        fill="#db2777"
-                        stroke="#ffffff"
-                        strokeWidth="1"
+                        cx={p.x}
+                        cy={p.y}
+                        r="3.5"
+                        fill="#ffffff"
+                        stroke="#111111"
+                        strokeWidth="1.5"
                         className="cursor-pointer hover:stroke-[#111111] hover:scale-125 transition-transform"
                         onMouseEnter={() => setHoveredLineNode({ round: p.round, type: "seller", price: p.price })}
                         onMouseLeave={() => setHoveredLineNode(null)}
@@ -885,7 +918,7 @@ export default function DashboardPage() {
                 {/* DYNAMIC HOVER TOOLTIP ON NODE */}
                 {hoveredLineNode && (
                   <div className="absolute top-2 left-1/2 transform -translate-x-1/2 bg-[#111111] border border-[#111111] text-[8.5px] font-mono px-2.5 py-1 text-white flex gap-1.5 items-center z-10 shadow-[2px_2px_0px_rgba(17,17,17,1)]">
-                    <span className={hoveredLineNode.type === "buyer" ? "text-cyan-300" : "text-pink-300"}>
+                    <span className="text-gray-300">
                       ROUND {hoveredLineNode.round} [{hoveredLineNode.type === "buyer" ? "BUYER BID" : "SELLER ASK"}]:
                     </span>
                     <span className="font-bold">€{hoveredLineNode.price.toLocaleString()}</span>
@@ -933,17 +966,33 @@ export default function DashboardPage() {
                   <line x1="50" y1="30" x2="420" y2="30" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="1 3" />
                   
                   {/* ZERO MARGIN REFERENCE LINE */}
-                  <line x1="50" y1="120" x2="420" y2="120" stroke="#ef4444" strokeWidth="1" strokeDasharray="2 2" opacity="0.15" />
+                  <line x1="50" y1="120" x2="420" y2="120" stroke="#111111" strokeWidth="1" strokeDasharray="2 2" opacity="0.25" />
 
                   {/* COORD DOTS */}
                   {scatterPoints.map(point => {
                     const isSelected = selectedDealId === point.id;
                     const isHovered = hoveredScatterNode === point.id;
-                    const color = point.status === "MATCHED" 
-                      ? "#10b981" 
-                      : point.status === "DEADLOCK"
-                      ? "#ef4444" 
-                      : "#0284c7"; 
+
+                    if (point.status === "DEADLOCK") {
+                      return (
+                        <rect
+                          key={point.id}
+                          x={point.x - (isSelected ? 5.5 : isHovered ? 5 : 4)}
+                          y={point.y - (isSelected ? 5.5 : isHovered ? 5 : 4)}
+                          width={isSelected ? 11 : isHovered ? 10 : 8}
+                          height={isSelected ? 11 : isHovered ? 10 : 8}
+                          fill="url(#pattern-stripes)"
+                          stroke="#111111"
+                          strokeWidth={isSelected ? 1.5 : 1}
+                          className="cursor-pointer transition-all hover:scale-125"
+                          onMouseEnter={() => setHoveredScatterNode(point.id)}
+                          onMouseLeave={() => setHoveredScatterNode(null)}
+                          onClick={() => handleSelectDeal(point.id)}
+                        />
+                      );
+                    }
+
+                    const fillValue = point.status === "MATCHED" ? "#111111" : "#9ca3af";
 
                     return (
                       <circle
@@ -951,7 +1000,7 @@ export default function DashboardPage() {
                         cx={point.x}
                         cy={point.y}
                         r={isSelected ? 6 : isHovered ? 5.5 : 4}
-                        fill={color}
+                        fill={fillValue}
                         stroke={isSelected ? "#111111" : "#ffffff"}
                         strokeWidth={isSelected ? 1.5 : 1}
                         className="cursor-pointer transition-all hover:scale-125"
@@ -978,7 +1027,7 @@ export default function DashboardPage() {
                   if (!node) return null;
                   return (
                     <div className="absolute top-2 left-1/2 transform -translate-x-1/2 bg-[#111111] border border-[#111111] text-[8.5px] font-mono px-3 py-1 text-white flex flex-col gap-0.5 shadow-[2px_2px_0px_rgba(17,17,17,1)] z-10">
-                      <span className="font-bold text-cyan-300 uppercase">{node.item_name}</span>
+                      <span className="font-bold text-gray-300 uppercase">{node.item_name}</span>
                       <div className="text-[7.5px] text-gray-400">
                         SPEED: {node.speed} ROUNDS | SAVINGS RATE: {node.marginCapture}%
                       </div>
@@ -1112,7 +1161,7 @@ export default function DashboardPage() {
                         onClick={() => handleSelectDeal(item.id)}
                         className={`cursor-pointer transition-all ${
                           isSelected 
-                            ? "bg-cyan-50/50 text-[#111111] font-bold border-l-2 border-l-cyan-600" 
+                            ? "bg-gray-100 text-[#111111] font-bold border-l-2 border-l-[#111111]" 
                             : "hover:bg-gray-50 text-gray-600 hover:text-[#111111]"
                         }`}
                       >
@@ -1120,27 +1169,25 @@ export default function DashboardPage() {
                         <td className="p-3">
                           <span className={`px-1.5 py-0.5 text-[8px] font-bold border ${
                             item.perspective === "BUYER" 
-                              ? "bg-cyan-50 text-cyan-700 border-cyan-300" 
-                              : "bg-indigo-50 text-indigo-700 border-indigo-300"
+                              ? "bg-gray-100 text-gray-800 border-gray-400" 
+                              : "bg-gray-200 text-gray-900 border-gray-500"
                           }`}>
                             {item.perspective || "BUYER"}
                           </span>
                         </td>
                         <td className="p-3">
-                          <span className={`px-1.5 py-0.5 text-[8px] font-bold ${
-                            item.negotiation_style === "INTEGRATIVE" ? "text-fuchsia-700" : "text-cyan-700"
-                          }`}>
+                          <span className="px-1.5 py-0.5 text-[8px] font-bold text-gray-700">
                             {item.negotiation_style}
                           </span>
                         </td>
                         <td className="p-3 text-[#111111]">€{limitVal.toLocaleString()}</td>
-                        <td className="p-3 text-right font-mono text-emerald-600 font-bold">
+                        <td className="p-3 text-right font-mono text-gray-900 font-bold">
                           {bidVal > 0 ? `€${bidVal.toLocaleString()}` : "—"}
                         </td>
-                        <td className="p-3 text-right font-mono text-amber-600 font-bold">
+                        <td className="p-3 text-right font-mono text-gray-600 font-bold">
                           {askVal > 0 ? `€${askVal.toLocaleString()}` : "—"}
                         </td>
-                        <td className={`p-3 text-right font-mono font-bold ${spreadVal <= 0 ? "text-emerald-600" : "text-gray-500"}`}>
+                        <td className={`p-3 text-right font-mono font-bold ${spreadVal <= 0 ? "text-[#111111]" : "text-gray-500"}`}>
                           {spreadVal <= 0 ? "SETTLED" : `€${spreadVal.toLocaleString()}`}
                         </td>
                         <td className="p-3 text-right text-gray-600 font-mono">
@@ -1149,12 +1196,12 @@ export default function DashboardPage() {
                         <td className="p-3 text-center">
                           <span className={`px-1.5 py-0.5 border text-[8.5px] font-bold ${
                             item.status === "DEADLOCK"
-                              ? "border-red-600 bg-red-50 text-red-800 animate-pulse"
+                              ? "border-[#111111] bg-[#111111] text-white animate-pulse"
                               : item.status === "MATCHED"
-                              ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                              ? "border-[#111111] bg-gray-100 text-[#111111] font-bold"
                               : item.status === "TERMINATED"
-                              ? "border-gray-500 bg-gray-100 text-gray-600"
-                              : "border-cyan-600 bg-cyan-50 text-cyan-800"
+                              ? "border-gray-300 bg-gray-50 text-gray-500"
+                              : "border-gray-400 bg-white text-gray-700"
                           }`}>
                             {item.status}
                           </span>
