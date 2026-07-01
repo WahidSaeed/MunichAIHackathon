@@ -50,7 +50,7 @@ export default function InventoryPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("http://localhost:8080/api/inventory");
+      const res = await fetch("https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/inventory");
       if (!res.ok) {
         throw new Error(`Failed to load inventory: ${res.statusText}`);
       }
@@ -125,7 +125,7 @@ export default function InventoryPage() {
         image_url: selectedItem.image_path
       };
 
-      const res = await fetch("http://localhost:8080/api/deals/create", {
+      const res = await fetch("https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/deals/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
