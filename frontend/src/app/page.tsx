@@ -689,7 +689,7 @@ function HomeContent() {
   // Fetch all deals from backend API
   const fetchDeals = async (selectFirst = false) => {
     try {
-      const res = await fetch("http://localhost:8080/api/deals");
+      const res = await fetch("https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/deals");
       if (!res.ok) throw new Error("Backend connection offline.");
       const data = await res.json();
       setDeals(data);
@@ -713,7 +713,7 @@ function HomeContent() {
   // Fetch pioneer telemetry stream
   const fetchPioneerStream = async () => {
     try {
-      const res = await fetch("http://localhost:8080/api/observability/pioneer-stream");
+      const res = await fetch("https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/observability/pioneer-stream");
       if (res.ok) {
         const data = await res.json();
         setPioneerStream(data);
@@ -731,7 +731,7 @@ function HomeContent() {
       return;
     }
     try {
-      const res = await fetch("http://localhost:8080/api/deals/update-style", {
+      const res = await fetch("https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/deals/update-style", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -752,7 +752,7 @@ function HomeContent() {
   // Archive/Unarchive a deal environment
   const handleArchiveDeal = async (dealId: string, archive: boolean) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/deals/${dealId}/archive?is_archived=${archive}`, {
+      const res = await fetch(`https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/deals/${dealId}/archive?is_archived=${archive}`, {
         method: "PUT",
       });
       if (res.ok) {
@@ -777,7 +777,7 @@ function HomeContent() {
   // Permanently delete a deal environment
   const handleDeleteDeal = async (dealId: string) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/deals/${dealId}`, {
+      const res = await fetch(`https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/deals/${dealId}`, {
         method: "DELETE",
       });
       if (res.ok) {
@@ -849,7 +849,7 @@ function HomeContent() {
         try {
           if (activeDealId) {
             setStepping(true);
-            const res = await fetch("http://localhost:8080/api/negotiate/step", {
+            const res = await fetch("https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/negotiate/step", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ deal_id: activeDealId })
@@ -932,7 +932,7 @@ function HomeContent() {
 
         const timer = setTimeout(async () => {
           try {
-            const res = await fetch("http://localhost:8080/api/negotiate/step", {
+            const res = await fetch("https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/negotiate/step", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ deal_id: d.id })
@@ -984,7 +984,7 @@ function HomeContent() {
     if (!newLotName.trim()) return;
     setSubmitting(true);
     try {
-      const res = await fetch("http://localhost:8080/api/deals/create", {
+      const res = await fetch("https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/deals/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1027,7 +1027,7 @@ function HomeContent() {
     setParseStep("SEEDING");
     
     try {
-      const res = await fetch("http://localhost:8080/api/deals/ingest", {
+      const res = await fetch("https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/deals/ingest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1104,7 +1104,7 @@ function HomeContent() {
       const formData = new FormData();
       formData.append("file", selectedFile);
       
-      const res = await fetch("http://localhost:8080/api/deals/ingest-file", {
+      const res = await fetch("https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/deals/ingest-file", {
         method: "POST",
         body: formData,
       });
@@ -1149,7 +1149,7 @@ function HomeContent() {
     if (!activeDealId || stepping) return;
     setStepping(true);
     try {
-      const res = await fetch("http://localhost:8080/api/negotiate/step", {
+      const res = await fetch("https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/negotiate/step", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deal_id: activeDealId })
@@ -1169,7 +1169,7 @@ function HomeContent() {
     const msg = operatorMsg;
     setOperatorMessage("");
     try {
-      await fetch(("http://localhost:8080/api/negotiate/message"), {
+      await fetch(("https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/negotiate/message"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1187,7 +1187,7 @@ function HomeContent() {
   const handleSendPreset = async (msgText: string) => {
     if (!activeDealId || !msgText.trim()) return;
     try {
-      await fetch("http://localhost:8080/api/negotiate/message", {
+      await fetch("https://fat285w9p3.execute-api.eu-central-1.amazonaws.com/prod/api/negotiate/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
